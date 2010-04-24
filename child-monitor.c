@@ -163,7 +163,7 @@ int main(int argc, char **argv)
 			pid_file = optarg;
 			break;
 		case '?':
-			usage(1);
+			exit(1);
 			break;
 		default:
 			if (isprint(c))
@@ -174,7 +174,7 @@ int main(int argc, char **argv)
 				fprintf(stderr,
 					"%s: unknown option char 0x%02x\n",
 					myname, c);
-			usage(1);
+			exit(1);
 			break;
 		}
 	}
@@ -187,7 +187,8 @@ int main(int argc, char **argv)
 	}
 
 	if (! argv[optind]) {
-		usage(1);
+		fprintf(stderr, "%s: need a program to run.\n", myname);
+		exit(1);
 	}
 	if (! log_name) {
 		log_name = argv[optind];
