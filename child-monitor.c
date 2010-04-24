@@ -14,6 +14,9 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <pty.h>
+#include <time.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 
 /**
@@ -85,9 +88,11 @@ static int     pty_data_len = 0;
 static int     min_child_wait_time = 2;
 static int     max_child_wait_time = 300; /* 5 minutes */
 static int     child_wait_time = 2;
+static uid_t   child_uid = 0;
+static char *  child_username = NULL;
 
 
-static const char *short_options = "dCE:e:hL:l:M:m:p:";
+static const char *short_options = "dCE:e:hL:l:M:m:p:u:";
 static struct option long_options[] = {
 	{ "daemon"        , 0, NULL, 'd' },
 	{ "clear-env"     , 0, NULL, 'C' },
@@ -99,6 +104,7 @@ static struct option long_options[] = {
 	{ "max-wait-time" , 1, NULL, 'M' },
 	{ "min-wait-time" , 1, NULL, 'm' },
 	{ "pid-file"      , 1, NULL, 'p' },
+	{ "user"          , 1, NULL, 'u' },
 	{ 0               , 0,    0,   0 }
 };
 
@@ -162,8 +168,17 @@ int main(int argc, char **argv)
 		case 'p':
 			pid_file = optarg;
 			break;
+		case 'u':
+			if (child_username) {
+				logparent(LOG_ERR,
+					  "username specified twice, "
+					  "which one do I use?\n");
+				exit(1);
+			}
+			child_username = optarg;
+			break;
 		case '?':
-			usage(1);
+			exit(1);
 			break;
 		default:
 			if (isprint(c))
@@ -174,8 +189,39 @@ int main(int argc, char **argv)
 				fprintf(stderr,
 					"%s: unknown option char 0x%02x\n",
 					myname, c);
-			usage(1);
+			exit(1);
 			break;
+		}
+	}
+
+	if (child_username) {
+		struct passwd *pw;
+		int getpwnam_errno = 0;
+
+		errno = 0;
+		/* Look for this as a login name. */
+		pw = getpwnam(child_username);
+		if (pw) {
+			child_uid = pw->pw_uid;
+		} else {
+			/* Save errno from getpwnam(), for use in a later error
+			   message. */
+			getpwnam_errno = errno;
+			/* Now try the name as a uid. */
+			child_uid = (int)strtol(child_username, &endptr, 10);
+			if (*endptr || child_uid < 0) {
+				if (getpwnam_errno) {
+					logparent(LOG_ERR,
+						  "unknown user name: %s: %s\n",
+						  child_username,
+						  strerror(getpwnam_errno));
+				} else {
+					logparent(LOG_ERR,
+						  "unknown user name %s\n",
+						  child_username);
+				}
+				exit(1);
+			}
 		}
 	}
 
@@ -187,7 +233,8 @@ int main(int argc, char **argv)
 	}
 
 	if (! argv[optind]) {
-		usage(1);
+		fprintf(stderr, "%s: need a program to run.\n", myname);
+		exit(1);
 	}
 	if (! log_name) {
 		log_name = argv[optind];
@@ -235,6 +282,7 @@ Usage: %s [args] [--] childpath [child_args...]\n\
   -m|--min-wait-time <time>   Minimum time between child starts\n\
                                 (seconds, cannot be less than 1)\n\
   -p|--pid-file <file>        Write PID to <file>, if in the background\n\
+  -u|--user <user>            User to run child as (name or uid)\n\
   -- is required if childpath or any of child_args begin with -\n",
 		myname);
 	exit(exitcode);
@@ -728,6 +776,7 @@ static void start_child(void)
 {
 	pid_t pid;
 	int forkpty_errno;
+	struct timespec ts = { 0, 100000 }; /* 0.1milliseconds */
 
 	logparent(LOG_INFO, "starting %s\n", child_args[0]);
 
@@ -750,9 +799,19 @@ static void start_child(void)
 
 	/* Child */
 	setup_env();
+	if (child_uid && setuid(child_uid)) {
+		logparent(LOG_WARNING, "cannot setuid(%d): %s\n",
+			  (int)child_uid, strerror(errno));
+		/* This sleep is to try to ensure that all our output has gone
+		   to the parent.  There is probably a proper way to do
+		   that. */
+		nanosleep(&ts, NULL);
+		exit(99);
+	}
 	if (execv(child_args[0], child_args)) {
 		logparent(LOG_WARNING, "cannot exec %s: %s\n",
 			  child_args[0], strerror(errno));
+		nanosleep(&ts, NULL);
 		exit(99);
 	}
 }

@@ -1,7 +1,5 @@
 -*- outline -*-
 
-* UID setting
-
 * Email notification
 
 Should probably have some backoff so we don't send email continuously.

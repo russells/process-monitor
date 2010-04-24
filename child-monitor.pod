@@ -88,6 +88,12 @@ With the -d or --daemon flag, makes B<child-monitor> write its PID to
 I<pidfile> after it goes into the background.  Without -d or --daemon,
 B<child-monitor> does not write to I<pidfile>.
 
+=item -u I<user>
+
+=item --user I<user>
+
+Run the child as I<user>, which can be a name or uid.
+
 =back
 
 =head1 SIGNAL HANDLING
