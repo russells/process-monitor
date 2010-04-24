@@ -1,0 +1,150 @@
+=head1 NAME
+
+child-monitor - run a child process and restart it when it exits.
+
+=head1 SYNOPSIS
+
+B<child-monitor> I<[options]> B<[--]> I<child [child_args...]>
+
+=head1 DESCRIPTION
+
+B<child-monitor> runs another program as a child process.  The child process
+will be restarted when it exits, with delays to prevent continuous restarting.
+Appropriate signals are passed to the child.
+
+I<child> is a path to an executable.  I<child_args> are any number of arguments
+that will be passed to the child.
+
+I<--> is required if any of I<child_args> begins with 'I<->' due to option
+processing.  It's probably better to always include I<-->.
+
+=head1 OPTIONS
+
+=over
+
+=item -d
+
+=item --daemon
+
+Go into the background before running I<child>.  This changes the handling of
+SIGHUP, since that signal is commonly used by daemons to tell them to re-read
+configuration.
+
+=item -C
+
+=item --clear-env
+
+Clear the environment before setting any variables specified by -E.
+
+=item -E NAME=VALUE
+
+=item --env NAME=VALUE
+
+Pass this environment variable to the child process.  To unset a variable, omit
+the '=VALUE'.
+
+=item -e I<emailaddress>
+
+=item --email I<emailaddress>
+
+Send email to I<emailaddress> when restarting I<child>.  (Not implemented.)
+
+=item -L I<name>
+
+=item --child-log-name I<name>
+
+Use I<name> in messages from the child process.  Defaults to the last path
+component of I<child>.
+
+=item -l I<name>
+
+=item --log-name I<name>
+
+Use I<name> in messages from B<child-monitor>.  This enables messages from
+different B<child-monitor> processes to be distinguished in syslog.  Defaults
+to the last path component of the name that was used to start B<child-monitor>.
+
+=item -M I<time>
+
+=item --max-wait-time I<time>
+
+Specify the maximum time to wait between child restarts as I<time>, in seconds.
+
+=item -m I<time>
+
+=item --min-wait-time I<time>
+
+Specify the minimum time to wait between child restarts as I<time>, in seconds.
+B<child-monitor> will always wait at least one second between restarts.
+
+The wait time starts at I<time>, and doubles for each start, up to the maximum
+specified with I<-M>.
+
+=item -p I<pidfile>
+
+=item --pid-file I<pidfile>
+
+With the -d or --daemon flag, makes B<child-monitor> write its PID to
+I<pidfile> after it goes into the background.  Without -d or --daemon,
+B<child-monitor> does not write to I<pidfile>.
+
+=back
+
+=head1 SIGNAL HANDLING
+
+SIGINT and SIGTERM are handled by the parent, and immediately sent to the child
+when they happen.  After sending these signals, the child is not restarted
+again, and B<child-monitor> exits the next time that the child exits.
+
+When run in the foreground, SIGHUP is handled the same way as SIGINT and
+SIGTERM.  When run as a daemon (-d or --daemon), SIGHUP is passed to the child,
+and B<child-monitor> continues as normal.
+
+SIGUSR1 tells B<child-monitor> to stop monitoring the child process.  After
+this signal, the child process will not be restarted if it exits.
+
+SIGUSR2 tells B<child-monitor> to continue monitoring the child process.  If
+the child is still running, B<child-monitor> does nothing.  If it is not
+running, it is restarted.
+
+SIGCHLD is handled for child process management, and SIGALRM is used for child
+process restart timeouts.
+
+=head1 CONFIGURATION FILE
+
+Needs one?
+
+=head1 EXAMPLES
+
+=over
+
+=item Run ls?
+
+ child-monitor -- /bin/ls
+
+=back
+
+=head1 BUGS
+
+??
+
+=head1 AUTHOR
+
+Russell Steicke <russells@adelie.cx>
+
+=head1 COPYRIGHT
+
+Copyright (C) 2010 Russell Steicke.  Released under the terms of the GNU
+General Public License, but dedicated to the public domain at the beginning of
+the tenth calendar year after publishing (ie the start of 2020 for version 0.1).
+
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+=head1 VERSION
+
+0.1
+
+=head1 SEE ALSO
+
+init(8), upstart(8).
