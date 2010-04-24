@@ -1,0 +1,13 @@
+-*- outline -*-
+
+* UID setting
+
+* Email notification
+
+Should probably have some backoff so we don't send email continuously.
+
+* Command pipe
+
+With a different command mode for the main program (or possibly a different
+program) that can be used to send commands to the main process in order to
+control the child.
