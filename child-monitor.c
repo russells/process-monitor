@@ -475,13 +475,14 @@ static void monitor_child(void)
 			logparent(LOG_WARNING, "select error: %s\n",
 				  strerror(errno));
 		}
-		if (FD_ISSET(signal_command_pipe[0], &read_fds)) {
-			read_signal_command_pipe();
-		}
+		/* Read data on the pty first so we don't miss any. */
 		if (pty_fd >= 0) {
 			if (FD_ISSET(pty_fd, &read_fds)) {
 				read_pty_fd();
 			}
+		}
+		if (FD_ISSET(signal_command_pipe[0], &read_fds)) {
+			read_signal_command_pipe();
 		}
 	}
 }
@@ -561,6 +562,9 @@ static void read_pty_fd(void)
 {
 	char buf[1024];
 
+	if (pty_fd <= 0)
+		return;
+
 	while (1) {
 		int ret;
 		int i;
@@ -573,8 +577,14 @@ static void read_pty_fd(void)
 			return;
 		} else if (-1 == ret) {
 			if (errno != EWOULDBLOCK) {
-				logparent(LOG_INFO, "cannot read from pty: %s\n",
-					  strerror(errno));
+				/* When the child exits we get EIO on the pty.
+				 * Ignore this since it's a normal
+				 * occurrence.
+				 */
+				if (errno != EIO)
+					logparent(LOG_INFO,
+						  "cannot read from pty: %s\n",
+						  strerror(errno));
 				close(pty_fd);
 				pty_fd = -1;
 			}
@@ -629,6 +639,17 @@ static void handle_child_signal(void)
 {
 	int status;
 	int wait_time;
+
+	/* Read data from the child here so we flush that file before it's
+	 * closed.  We seem to sometimes get the SIGCHLD (and hence end up here
+	 * in the signal command pipe handler) before select notifies us that
+	 * the pty is readable.  So we take the opportunity here to read
+	 * anything that's available.
+	 *
+	 * I don't understand the buffering that's happening here, but
+	 * there is definitely something buffering data on the pty.
+	 */
+	read_pty_fd();
 
 	wait(&status);
 	if (WIFSIGNALED(status)) {
