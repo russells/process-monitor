@@ -741,6 +741,7 @@ static void handle_usr2_signal(void)
 	logparent(CM_INFO, "SIGUSR2: I will monitor %s again\n",
 		  child_args[0]);
 	do_restart = 1;
+	child_wait_time = min_child_wait_time;
 	if (child_pid <= 0) {
 		start_child();
 	}
