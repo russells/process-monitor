@@ -18,21 +18,13 @@
 #include <sys/types.h>
 #include <pwd.h>
 
-
-/**
- * Contains a list of strings to set or unset in the environment.  We guarantee
- * that env[maxlen]==NULL.
- */
-struct env_list {
-	char **env;		/* Strings */
-	size_t len;		/* The number we have */
-	size_t maxlen;		/* Max size of env */
-};
+#include "log.h"
+#include "envlist.h"
+#include "is_daemon.h"
 
 
 static void usage(int exitcode);
 static void add_env(char *envvar);
-static void add_env_to_list(struct env_list *el, char *envvar);
 static void setup_env(void);
 static void go_daemon(void);
 static void set_signal_handlers(void);
@@ -60,36 +52,29 @@ static void handle_term_signal(void);
 static void handle_usr1_signal(void);
 static void handle_usr2_signal(void);
 
-static void vlogmsg(int level, char *name, char *format, va_list va);
-static void logparent(int level, char *format, ...);
-static void logchild(int level, char *format, ...);
 
-
-static char *  myname;
-static int     go_daemon_flag = 0;
-static int     is_daemon = 0;
-static char *  email_address = NULL;
-static char *  log_name = NULL;
-static char ** child_args = NULL;
-static int     clear_env_flag = 0;
+static int              go_daemon_flag = 0;
+static char *           email_address = NULL;
+static char **          child_args = NULL;
+static int              clear_env_flag = 0;
 /** List of env vars to set in the child. */
-struct env_list child_env_list = { NULL, 0, 0 };
+static struct envlist * child_envlist = NULL;
 /** List of env vars to remove from the child environment. */
-struct env_list child_unenv_list = { NULL, 0, 0 };
-static pid_t   child_pid = 0;
-static char *  pid_file = NULL;
-static int     do_restart = 1;
-static int     do_exit = 0;
-static int     signal_command_pipe[2];
-static int     pty_fd = -1;
+static struct envlist * child_unenvlist = NULL;
+static pid_t            child_pid = 0;
+static char *           pid_file = NULL;
+static int              do_restart = 1;
+static int              do_exit = 0;
+static int              signal_command_pipe[2];
+static int              pty_fd = -1;
 #define PTY_LINE_LEN 2048
-static char    pty_data[PTY_LINE_LEN];
-static int     pty_data_len = 0;
-static int     min_child_wait_time = 2;
-static int     max_child_wait_time = 300; /* 5 minutes */
-static int     child_wait_time = 2;
-static uid_t   child_uid = 0;
-static char *  child_username = NULL;
+static char             pty_data[PTY_LINE_LEN];
+static int              pty_data_len = 0;
+static int              min_child_wait_time = 2;
+static int              max_child_wait_time = 300; /* 5 minutes */
+static int              child_wait_time = 2;
+static uid_t            child_uid = 0;
+static char *           child_username = NULL;
 
 
 static const char *short_options = "dCE:e:hL:l:M:m:p:u:";
@@ -117,9 +102,9 @@ int main(int argc, char **argv)
 
 	slashptr = strrchr(argv[0], '/');
 	if (slashptr)
-		myname = slashptr + 1;
+		parent_log_name = slashptr + 1;
 	else
-		myname = argv[0];
+		parent_log_name = argv[0];
 
 	while (1) {
 		c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -142,15 +127,15 @@ int main(int argc, char **argv)
 			usage(0);
 			break;
 		case 'L':
-			log_name = optarg;
+			child_log_name = optarg;
 			break;
 		case 'l':
-			myname = optarg;
+			parent_log_name = optarg;
 			break;
 		case 'M':
 			max_child_wait_time = (int)strtol(optarg, &endptr, 10);
 			if (*endptr || max_child_wait_time < 0) {
-				logparent(LOG_ERR,
+				logparent(CM_ERROR,
 					  "strange max wait time: %d\n",
 					  max_child_wait_time);
 				exit(1);
@@ -159,7 +144,7 @@ int main(int argc, char **argv)
 		case 'm':
 			min_child_wait_time = (int)strtol(optarg, &endptr, 10);
 			if (*endptr || min_child_wait_time < 0) {
-				logparent(LOG_ERR,
+				logparent(CM_ERROR,
 					  "strange min wait time: %d\n",
 					  min_child_wait_time);
 				exit(1);
@@ -170,7 +155,7 @@ int main(int argc, char **argv)
 			break;
 		case 'u':
 			if (child_username) {
-				logparent(LOG_ERR,
+				logparent(CM_ERROR,
 					  "username specified twice, "
 					  "which one do I use?\n");
 				exit(1);
@@ -184,11 +169,11 @@ int main(int argc, char **argv)
 			if (isprint(c))
 				fprintf(stderr,
 					"%s: unknown option char '%c'\n",
-					myname, c);
+					parent_log_name, c);
 			else
 				fprintf(stderr,
 					"%s: unknown option char 0x%02x\n",
-					myname, c);
+					parent_log_name, c);
 			exit(1);
 			break;
 		}
@@ -211,12 +196,12 @@ int main(int argc, char **argv)
 			child_uid = (int)strtol(child_username, &endptr, 10);
 			if (*endptr || child_uid < 0) {
 				if (getpwnam_errno) {
-					logparent(LOG_ERR,
+					logparent(CM_ERROR,
 						  "unknown user name: %s: %s\n",
 						  child_username,
 						  strerror(getpwnam_errno));
 				} else {
-					logparent(LOG_ERR,
+					logparent(CM_ERROR,
 						  "unknown user name %s\n",
 						  child_username);
 				}
@@ -228,31 +213,31 @@ int main(int argc, char **argv)
 	child_wait_time = min_child_wait_time;
 	if (max_child_wait_time < min_child_wait_time) {
 		max_child_wait_time = min_child_wait_time;
-		logparent(LOG_INFO, "max wait time set to %d seconds\n",
+		logparent(CM_INFO, "max wait time set to %d seconds\n",
 			  max_child_wait_time);
 	}
 
 	if (! argv[optind]) {
-		fprintf(stderr, "%s: need a program to run.\n", myname);
+		fprintf(stderr, "%s: need a program to run.\n", parent_log_name);
 		exit(1);
 	}
-	if (! log_name) {
-		log_name = argv[optind];
-		slashptr = strrchr(log_name, '/');
+	if (! child_log_name) {
+		child_log_name = argv[optind];
+		slashptr = strrchr(child_log_name, '/');
 		if (slashptr)
-			log_name = slashptr + 1;
+			child_log_name = slashptr + 1;
 	}
 	child_args = argv + optind;
 
 	make_signal_pipe();
 	if (go_daemon_flag) {
 		/* Open the log first, for error messages in go_daemon(). */
-		openlog(log_name, LOG_PID, LOG_DAEMON);
+		openlog(child_log_name, LOG_PID, LOG_DAEMON);
 		go_daemon();
 	}
 	set_signal_handlers();
 	monitor_child();
-	logparent(LOG_WARNING, "monitor_child() returned."
+	logparent(CM_WARN, "monitor_child() returned."
 		  "  This should not happen.\n");
 	exit(88);
 }
@@ -261,8 +246,8 @@ int main(int argc, char **argv)
 void usage(int exitcode)
 {
 	/* We haven't become a daemon yet, so use printf instead of logmsg.
-	 * Also, logmsg prefixes the message with myname, which we don't want
-	 * here.
+	 * Also, logmsg prefixes the message with parent_log_name, which we
+	 * don't want here.
 	 */
 	fprintf(stderr, "\
 Usage: %s [args] [--] childpath [child_args...]\n\
@@ -284,7 +269,7 @@ Usage: %s [args] [--] childpath [child_args...]\n\
   -p|--pid-file <file>        Write PID to <file>, if in the background\n\
   -u|--user <user>            User to run child as (name or uid)\n\
   -- is required if childpath or any of child_args begin with -\n",
-		myname);
+		parent_log_name);
 	exit(exitcode);
 }
 
@@ -297,23 +282,23 @@ static void setup_env()
 	if (clear_env_flag)
 		clearenv();
 
-	if (child_env_list.env && child_env_list.len) {
-		envvars = child_env_list.env;
+	if (child_envlist && child_envlist->env && child_envlist->len) {
+		envvars = child_envlist->env;
 		while (*envvars) {
 			ret = putenv(*envvars);
 			if (-1 == ret) {
-				logchild(LOG_WARNING,
+				logchild(CM_WARN,
 					 "error   setting %s\n", envvars);
 			}
 			envvars++;
 		}
 	}
-	if (child_unenv_list.env && child_unenv_list.len) {
-		envvars = child_unenv_list.env;
+	if (child_unenvlist && child_unenvlist->env && child_unenvlist->len) {
+		envvars = child_unenvlist->env;
 		while (*envvars) {
 			ret = unsetenv(*envvars);
 			if (-1 == ret) {
-				logchild(LOG_WARNING,
+				logchild(CM_WARN,
 					 "error unsetting %s\n", envvars);
 			}
 			envvars++;
@@ -322,53 +307,26 @@ static void setup_env()
 }
 
 
-static void add_env_to_list(struct env_list *envp, char *envvar)
-{
-	if (! envp->env) {
-		/* New array */
-		envp->maxlen = 10;
-		envp->env = malloc(sizeof(char*)*envp->maxlen);
-		if (! envp->env) {
-			logparent(LOG_ERR,
-				  "cannot malloc() for env: %s\n",
-				  strerror(errno));
-			exit(2);
-		}
-
-
-
-	} else if (envp->len == envp->maxlen-2) {
-		/* Extend the existing array */
-		char **new_env;
-		envp->maxlen += 10;
-		new_env = realloc(envp->env, sizeof(char*)*envp->maxlen);
-		if (! new_env) {
-			logparent(LOG_ERR,
-				  "cannot realloc() for env: %s\n",
-				  strerror(errno));
-			exit(2);
-		}
-	}
-	envp->env[envp->len++] = envvar;
-	envp->env[envp->len  ] = NULL;
-}
-
-
 static void add_env(char *envvar)
 {
 	char *equals;
+	struct envlist **el;
 
 	equals = strchr(envvar, '=');
 	if (equals == envvar) {
 		/* = at the beginning of the string */
-		logparent(LOG_ERR, "bad environment variable: %s\n", envvar);
+		logparent(CM_ERROR, "bad environment variable: %s\n", envvar);
 		exit(1);
 	}
 	if (equals) {
-		add_env_to_list(&child_env_list, envvar);
+		el = &child_envlist;
 	} else {
-		add_env_to_list(&child_unenv_list, envvar);
+		el = &child_unenvlist;
 	}
+	if (! *el) {
+		*el = envlist_new();
+	}
+	envlist_add(*el, envvar);
 }
 
 
@@ -380,7 +338,7 @@ static void go_daemon(void)
 	/* APUE, p?? */
 	ret = fork();
 	if (-1 == ret) {
-		logparent(LOG_WARNING, "cannot fork: %s\n", strerror(errno));
+		logparent(CM_WARN, "cannot fork: %s\n", strerror(errno));
 		exit(2);
 	}
 	if (0 != ret) {
@@ -408,7 +366,7 @@ static void go_daemon(void)
 
 		pid_file_file = fopen(pid_file, "w");
 		if (! pid_file_file) {
-			logparent(LOG_WARNING,
+			logparent(CM_WARN,
 				  "cannot open %s for writing: %s\n",
 				  pid_file, strerror(errno));
 		} else {
@@ -460,7 +418,7 @@ static void monitor_child(void)
 		FD_ZERO(&read_fds);
 		FD_SET(signal_command_pipe[0], &read_fds);
 		nfds = signal_command_pipe[0];
-		/* logparent(LOG_INFO, "--- select pty_fd==%d\n", pty_fd); */
+		/* logparent(CM_INFO, "--- select pty_fd==%d\n", pty_fd); */
 		if (pty_fd >= 0) {
 			FD_SET(pty_fd, &read_fds);
 			if (pty_fd > signal_command_pipe[0])
@@ -470,18 +428,19 @@ static void monitor_child(void)
 		timeout.tv_sec = child_wait_time;
 		timeout.tv_usec = 0;
 		ret = select(nfds, &read_fds, 0, 0, &timeout);
-		/* logparent(LOG_INFO, "--- select returns %d\n", ret); */
+		/* logparent(CM_INFO, "--- select returns %d\n", ret); */
 		if (-1 == ret && errno != EINTR) {
-			logparent(LOG_WARNING, "select error: %s\n",
+			logparent(CM_WARN, "select error: %s\n",
 				  strerror(errno));
 		}
-		if (FD_ISSET(signal_command_pipe[0], &read_fds)) {
-			read_signal_command_pipe();
-		}
+		/* Read data on the pty first so we don't miss any. */
 		if (pty_fd >= 0) {
 			if (FD_ISSET(pty_fd, &read_fds)) {
 				read_pty_fd();
 			}
+		}
+		if (FD_ISSET(signal_command_pipe[0], &read_fds)) {
+			read_signal_command_pipe();
 		}
 	}
 }
@@ -501,7 +460,7 @@ static void read_signal_command_pipe(void)
 	while (1) {
 		ret = read(signal_command_pipe[0], &c, 1);
 		if (0 == ret) {
-			logparent(LOG_WARNING, "read end of pipe closed!!\n");
+			logparent(CM_WARN, "read end of pipe closed!!\n");
 			/* Make the pipe again. */
 			make_signal_pipe();
 			return;
@@ -510,7 +469,7 @@ static void read_signal_command_pipe(void)
 			if (errno == EWOULDBLOCK) {
 				return;
 			}
-			logparent(LOG_WARNING,
+			logparent(CM_WARN,
 				  "cannot read from pipe: %s\n",
 				  strerror(errno));
 			return;
@@ -518,9 +477,9 @@ static void read_signal_command_pipe(void)
 
 		/*
 		if (isprint(c))
-			logparent(LOG_INFO, "read '%c'\n", c);
+			logparent(CM_INFO, "read '%c'\n", c);
 		else
-			logparent(LOG_INFO, "read 0x%02x\n", c);
+			logparent(CM_INFO, "read 0x%02x\n", c);
 		*/
 
 		switch (c) {
@@ -546,7 +505,7 @@ static void read_signal_command_pipe(void)
 			handle_usr2_signal();
 			break;
 		default:
-			logparent(LOG_WARNING,
+			logparent(CM_WARN,
 				  "unknown pipe char: 0x%02x\n", c);
 			break;
 		}
@@ -561,6 +520,9 @@ static void read_pty_fd(void)
 {
 	char buf[1024];
 
+	if (pty_fd <= 0)
+		return;
+
 	while (1) {
 		int ret;
 		int i;
@@ -568,13 +530,19 @@ static void read_pty_fd(void)
 		ret = read(pty_fd, buf, 1024);
 		if (0 == ret) {
 			/* pty closed - dead child? */
-			logparent(LOG_INFO, "pty closed\n");
+			logparent(CM_INFO, "pty closed\n");
 			pty_fd = -1;
 			return;
 		} else if (-1 == ret) {
 			if (errno != EWOULDBLOCK) {
-				logparent(LOG_INFO, "cannot read from pty: %s\n",
-					  strerror(errno));
+				/* When the child exits we get EIO on the pty.
+				 * Ignore this since it's a normal
+				 * occurrence.
+				 */
+				if (errno != EIO)
+					logparent(CM_INFO,
+						  "cannot read from pty: %s\n",
+						  strerror(errno));
 				close(pty_fd);
 				pty_fd = -1;
 			}
@@ -593,13 +561,13 @@ static void read_pty_fd(void)
 					pty_data[pty_data_len-2] = '\n';
 					pty_data[pty_data_len-1] = '\0';
 				}
-				logchild(LOG_INFO, "%s", pty_data);
+				logchild(CM_INFO, "%s", pty_data);
 				pty_data_len = 0;
 				continue;
 			}
 			if (pty_data_len == PTY_LINE_LEN-1) {
 				pty_data[pty_data_len] = '\0';
-				logchild(LOG_INFO, "%s\n", pty_data);
+				logchild(CM_INFO, "%s\n", pty_data);
 				pty_data_len = 0;
 				continue;
 			}
@@ -630,9 +598,20 @@ static void handle_child_signal(void)
 	int status;
 	int wait_time;
 
+	/* Read data from the child here so we flush that file before it's
+	 * closed.  We seem to sometimes get the SIGCHLD (and hence end up here
+	 * in the signal command pipe handler) before select notifies us that
+	 * the pty is readable.  So we take the opportunity here to read
+	 * anything that's available.
+	 *
+	 * I don't understand the buffering that's happening here, but
+	 * there is definitely something buffering data on the pty.
+	 */
+	read_pty_fd();
+
 	wait(&status);
 	if (WIFSIGNALED(status)) {
-		logparent(LOG_INFO,
+		logparent(CM_INFO,
 			  "%s[%d] exited due to signal %d with status %d\n",
 			  child_args[0], child_pid, WTERMSIG(status),
 			  WEXITSTATUS(status));
@@ -641,7 +620,7 @@ static void handle_child_signal(void)
 		/* 99 is returned by the child when the exec fails.  Don't log
 		   that as the child will already have logged the failure. */
 		if (retval != 99) {
-			logparent(LOG_INFO,
+			logparent(CM_INFO,
 				  "%s[%d] exited with status %d\n",
 				  child_args[0], child_pid,
 				  WEXITSTATUS(status));
@@ -649,13 +628,13 @@ static void handle_child_signal(void)
 	}
 	child_pid = 0;
 	if (pty_fd >= 0) {
-		logparent(LOG_INFO, "closing pty_fd (%d)\n", pty_fd);
+		logparent(CM_INFO, "closing pty_fd (%d)\n", pty_fd);
 		close(pty_fd);
 		pty_fd = -1;
 	}
 
 	if (do_exit) {
-		logparent(LOG_INFO, "child-monitor exiting\n");
+		logparent(CM_INFO, "child-monitor exiting\n");
 		exit(0);
 	}
 
@@ -664,7 +643,7 @@ static void handle_child_signal(void)
 			wait_time = 1;
 		else
 			wait_time = child_wait_time;
-		logparent(LOG_INFO, "waiting for %d seconds\n", wait_time);
+		logparent(CM_INFO, "waiting for %d seconds\n", wait_time);
 		alarm(wait_time);
 		set_child_wait_time();
 	}
@@ -693,9 +672,9 @@ static void handle_hup_signal(void)
 {
 	if (is_daemon) {
 		if (child_pid <= 0) {
-			logparent(LOG_INFO, "SIGHUP but no child\n");
+			logparent(CM_INFO, "SIGHUP but no child\n");
 		} else {
-			logparent(LOG_INFO, "passing SIGHUP to %s[%d]\n",
+			logparent(CM_INFO, "passing SIGHUP to %s[%d]\n",
 				  child_args[0], child_pid);
 			kill(child_pid, SIGHUP);
 		}
@@ -706,7 +685,7 @@ static void handle_hup_signal(void)
 			do_restart = 0;
 			do_exit = 1;
 		} else {
-			logparent(LOG_INFO, "exiting on SIGHUP\n");
+			logparent(CM_INFO, "exiting on SIGHUP\n");
 			exit(1);
 		}
 	}
@@ -719,11 +698,11 @@ static void handle_hup_signal(void)
 static void handle_int_signal(void)
 {
 	if (child_pid <= 0) {
-		logparent(LOG_INFO, "exiting on SIGINT\n");
+		logparent(CM_INFO, "exiting on SIGINT\n");
 		exit(1);
 	}
 
-	logparent(LOG_INFO, "passing SIGINT to %s[%d]\n",
+	logparent(CM_INFO, "passing SIGINT to %s[%d]\n",
 		  child_args[0], child_pid);
 	kill(child_pid, SIGINT);
 	do_restart = 0;
@@ -737,11 +716,11 @@ static void handle_int_signal(void)
 static void handle_term_signal(void)
 {
 	if (child_pid <= 0) {
-		logparent(LOG_INFO, "exiting on SIGTERM\n");
+		logparent(CM_INFO, "exiting on SIGTERM\n");
 		exit(1);
 	}
 
-	logparent(LOG_INFO, "passing SIGTERM to %s[%d]\n",
+	logparent(CM_INFO, "passing SIGTERM to %s[%d]\n",
 		  child_args[0], child_pid);
 	kill(child_pid, SIGTERM);
 	do_restart = 0;
@@ -751,7 +730,7 @@ static void handle_term_signal(void)
 
 static void handle_usr1_signal(void)
 {
-	logparent(LOG_INFO, "SIGUSR1: I will not monitor %s\n",
+	logparent(CM_INFO, "SIGUSR1: I will not monitor %s\n",
 		  child_args[0]);
 	do_restart = 0;
 }
@@ -759,9 +738,10 @@ static void handle_usr1_signal(void)
 
 static void handle_usr2_signal(void)
 {
-	logparent(LOG_INFO, "SIGUSR2: I will monitor %s again\n",
+	logparent(CM_INFO, "SIGUSR2: I will monitor %s again\n",
 		  child_args[0]);
 	do_restart = 1;
+	child_wait_time = min_child_wait_time;
 	if (child_pid <= 0) {
 		start_child();
 	}
@@ -778,20 +758,20 @@ static void start_child(void)
 	int forkpty_errno;
 	struct timespec ts = { 0, 100000 }; /* 0.1milliseconds */
 
-	logparent(LOG_INFO, "starting %s\n", child_args[0]);
+	logparent(CM_INFO, "starting %s\n", child_args[0]);
 
 	pid = forkpty(&pty_fd, NULL, NULL, NULL);
 	forkpty_errno = errno;
 
 	if (-1 == pid) {
 		child_pid = -1;
-		logparent(LOG_WARNING, "cannot fork: %s\n",
+		logparent(CM_WARN, "cannot fork: %s\n",
 			  strerror(forkpty_errno));
 		child_wait_time = 60;
 		return;
 	} else if (0 != pid) {
 		/* parent */
-		/* logparent(LOG_INFO, "after forkpty, pty_fd==%d\n", pty_fd); */
+		/* logparent(CM_INFO, "after forkpty, pty_fd==%d\n", pty_fd); */
 		child_pid = pid;
 		fcntl(pty_fd, F_SETFL, O_NONBLOCK);
 		return;
@@ -800,7 +780,7 @@ static void start_child(void)
 	/* Child */
 	setup_env();
 	if (child_uid && setuid(child_uid)) {
-		logparent(LOG_WARNING, "cannot setuid(%d): %s\n",
+		logparent(CM_WARN, "cannot setuid(%d): %s\n",
 			  (int)child_uid, strerror(errno));
 		/* This sleep is to try to ensure that all our output has gone
 		   to the parent.  There is probably a proper way to do
@@ -809,7 +789,7 @@ static void start_child(void)
 		exit(99);
 	}
 	if (execv(child_args[0], child_args)) {
-		logparent(LOG_WARNING, "cannot exec %s: %s\n",
+		logparent(CM_WARN, "cannot exec %s: %s\n",
 			  child_args[0], strerror(errno));
 		nanosleep(&ts, NULL);
 		exit(99);
@@ -824,7 +804,7 @@ static void make_signal_pipe(void)
 	ret = pipe(signal_command_pipe);
 	if (-1 == ret) {
 		fprintf(stderr, "%s: cannot make pipe: %s\n",
-			myname, strerror(errno));
+			parent_log_name, strerror(errno));
 		exit(2);
 	}
 	fcntl(signal_command_pipe[0], F_SETFL, O_NONBLOCK);
@@ -848,54 +828,3 @@ static void signal_handler(int sig)
 }
 
 
-static void logchild(int level, char *format, ...)
-{
-	va_list va;
-
-	va_start(va, format);
-	vlogmsg(level, log_name, format, va);
-	va_end(va);
-}
-
-
-static void logparent(int level, char *format, ...)
-{
-	va_list va;
-
-	va_start(va, format);
-	vlogmsg(level, myname, format, va);
-	va_end(va);
-}
-
-
-static void vlogmsg(int level, char *name, char *format, va_list va)
-{
-	char msg[400];
-	size_t msg_avail_len = 399;
-	char *msgstart = msg;
-
-	/* If we're not a daemon, prepend the program name to the message.  If
-	   we're a daemon, syslog does that for us. */
-	if (! is_daemon) {
-		size_t log_name_len = strlen(name);
-		strncpy(msg, name, msg_avail_len);
-		msgstart += log_name_len;
-		msg_avail_len -= log_name_len;
-		strncpy(msgstart, ": ", msg_avail_len);
-		msgstart += 2;
-		msg_avail_len -= 2;
-	}
-
-	vsnprintf(msgstart, msg_avail_len, format, va);
-	msg[399] = '\0';
-	if (is_daemon) {
-		syslog(level|LOG_DAEMON, "%s", msg);
-	} else {
-		FILE *f;
-		if (level == LOG_INFO)
-			f = stdout;
-		else
-			f = stderr;
-		fprintf(f, "%s", msg);
-	}
-}
