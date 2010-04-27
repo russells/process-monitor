@@ -17,6 +17,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <grp.h>
 
 #include "log.h"
 #include "envlist.h"
@@ -35,6 +36,7 @@ static void start_child(void);
 static void set_child_wait_time(void);
 static void make_signal_pipe(void);
 static void signal_handler(int sig);
+static void get_user_and_group_names(char *names);
 
 /*
  * These are essentially event handlers for the main loop.  The real signal
@@ -75,6 +77,8 @@ static int              max_child_wait_time = 300; /* 5 minutes */
 static int              child_wait_time = 2;
 static uid_t            child_uid = 0;
 static char *           child_username = NULL;
+static gid_t            child_gid = 0;
+static char *           child_groupname = NULL;
 
 
 static const char *short_options = "dCE:e:hL:l:M:m:p:u:";
@@ -154,13 +158,7 @@ int main(int argc, char **argv)
 			pid_file = optarg;
 			break;
 		case 'u':
-			if (child_username) {
-				logparent(CM_ERROR,
-					  "username specified twice, "
-					  "which one do I use?\n");
-				exit(1);
-			}
-			child_username = optarg;
+			get_user_and_group_names(optarg);
 			break;
 		case '?':
 			exit(1);
@@ -210,6 +208,37 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (child_groupname) {
+		struct group *gr;
+		int getgrnam_errno = 0;
+
+		errno = 0;
+		/* Look for this as a login name. */
+		gr = getgrnam(child_groupname);
+		if (gr) {
+			child_gid = gr->gr_gid;
+		} else {
+			/* Save errno from getgrnam(), for use in a later error
+			   message. */
+			getgrnam_errno = errno;
+			/* Now try the name as a uid. */
+			child_gid = (gid_t)strtol(child_groupname, &endptr, 10);
+			if (*endptr || child_gid < 0) {
+				if (getgrnam_errno) {
+					logparent(CM_ERROR,
+						  "unknown group name: %s: %s\n",
+						  child_groupname,
+						  strerror(getgrnam_errno));
+				} else {
+					logparent(CM_ERROR,
+						  "unknown group name %s\n",
+						  child_groupname);
+				}
+				exit(1);
+			}
+		}
+	}
+
 	child_wait_time = min_child_wait_time;
 	if (max_child_wait_time < min_child_wait_time) {
 		max_child_wait_time = min_child_wait_time;
@@ -243,6 +272,48 @@ int main(int argc, char **argv)
 }
 
 
+static void get_user_and_group_names(char *names)
+{
+	char *colon;
+	char *username = NULL;
+	char *groupname = NULL;
+
+	colon = strchr(names, ':');
+	if (NULL == colon) {
+		/* No : in names */
+		username = names;
+	} else if (colon == names) {
+		/* : at start of names - set group but not user */
+		groupname = colon + 1;
+	} else {
+		/* : somewhere else */
+		username = names;
+		*colon = '\0';
+		groupname = colon + 1;
+	}
+	if (username) {
+		if (child_username) {
+			logparent(CM_ERROR,
+				  "username specified twice, "
+				  "which one do I use?\n");
+			exit(1);
+		}
+		child_username = username;
+		fprintf(stderr, "username  %s\n", child_username);
+	}
+	if (groupname) {
+		if (child_groupname) {
+			logparent(CM_ERROR,
+				  "group name specified twice, "
+				  "which one do I use?\n");
+			exit(1);
+		}
+		child_groupname = groupname;
+		fprintf(stderr, "groupname %s\n", child_groupname);
+	}
+}
+
+
 void usage(int exitcode)
 {
 	/* We haven't become a daemon yet, so use printf instead of logmsg.
@@ -268,6 +339,7 @@ Usage: %s [args] [--] childpath [child_args...]\n\
                                 (seconds, cannot be less than 1)\n\
   -p|--pid-file <file>        Write PID to <file>, if in the background\n\
   -u|--user <user>            User to run child as (name or uid)\n\
+                                (can be user:group)\n\
   -- is required if childpath or any of child_args begin with -\n",
 		parent_log_name);
 	exit(exitcode);
@@ -779,6 +851,13 @@ static void start_child(void)
 
 	/* Child */
 	setup_env();
+	/* Set gid before uid, so that setting gid does not fail if we're no
+	   longer root. */
+	if (child_groupname && setgid(child_gid)) {
+		logparent(CM_ERROR, "cannot setgid(%d): %s\n",
+			  (int)child_gid, strerror(errno));
+		exit(99);
+	}
 	if (child_uid && setuid(child_uid)) {
 		logparent(CM_WARN, "cannot setuid(%d): %s\n",
 			  (int)child_uid, strerror(errno));
