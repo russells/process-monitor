@@ -22,5 +22,5 @@ install: default
 
 .PHONY: clean
 clean:
-	rm -f $(PROG) $(PROG_MAN)
+	rm -f $(PROG) $(PROG_OBJ) $(PROG_MAN)
 
