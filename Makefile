@@ -1,26 +1,43 @@
+# Makefile for child-monitor.
+# Russell Steicke, 2010-04-29.
+
+PROGRAM = child-monitor
+SRCS = child-monitor.c is_daemon.c log.c envlist.c
+
+OBJS = $(SRCS:.c=.o)
+DEPS = $(SRCS:.c=.d)
+DEPDEPS = Makefile
+PROGRAM_MAN = $(PROGRAM).1
 
 CFLAGS = -Wall -Werror -g
 LDFLAGS = -lutil
-PROG = child-monitor
-PROG_OBJ = $(PROG).o is_daemon.o log.o envlist.o
-PROG_MAN = $(PROG).1
 
+# Create the man page from perl POD format.
 %.1: %.pod
-	pod2man \
-		--center="User Commands" \
-		--release="User Commands" \
-		$< $@
+	pod2man --center="User Commands" --release="User Commands" $< $@
 
-.PHONY: default
-default: $(PROG) $(PROG_MAN)
+# Create dependency (.d) files from .c files.
+%.d: %.c $(DEPDEPS)
+	@echo DEP: $<
+	@rm -f $@
+	@$(CC) -E -M $(CFLAGS) $< > $@
 
-$(PROG): $(PROG_OBJ)
 
-install: default
-	cp $(PROG) /usr/local/bin/
-	cp $(PROG_MAN) /usr/local/share/man/man1/
+.PHONY: all
+all: $(PROGRAM) $(PROGRAM_MAN)
+
+$(PROGRAM): $(OBJS)
+
+install: all
+	cp $(PROGRAM) /usr/local/bin/
+	cp $(PROGRAM_MAN) /usr/local/share/man/man1/
+
+ifneq ($(MAKECMDGOALS),clean)
+-include $(DEPS)
+endif
+
 
 .PHONY: clean
 clean:
-	rm -f $(PROG) $(PROG_OBJ) $(PROG_MAN)
+	rm -f $(PROGRAM) $(OBJS) $(DEPS) $(PROGRAM_MAN)
 

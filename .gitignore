@@ -1,3 +1,4 @@
+*.d
 *.o
 child-monitor
 child-monitor.1
