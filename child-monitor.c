@@ -62,7 +62,9 @@ static int              clear_env_flag = 0;
 static struct envlist * child_envlist = NULL;
 /** List of env vars to remove from the child environment. */
 static struct envlist * child_unenvlist = NULL;
-static pid_t            child_pid = 0;
+/** PID of our child process.  Set to -1 to indicate that the child is not
+    running. */
+static pid_t            child_pid = -1;
 static char *           pid_file = NULL;
 static int              do_restart = 1;
 static int              do_exit = 0;
@@ -668,6 +670,7 @@ static void handle_child_signal(void)
 {
 	int status;
 	int wait_time;
+	pid_t pid;
 
 	/* Read data from the child here so we flush that file before it's
 	 * closed.  We seem to sometimes get the SIGCHLD (and hence end up here
@@ -680,7 +683,15 @@ static void handle_child_signal(void)
 	 */
 	read_pty_fd();
 
-	wait(&status);
+	/* We do the check for child_pid==-1 after the call to waitpid() since
+	 * if we get a SIGCHLD, we need to call waitpid() in any case, even if
+	 * we're ignoring that child.
+	 */
+	pid = waitpid(-1, &status, WNOHANG);
+	if (-1 == pid || -1 == child_pid || pid != child_pid) {
+		return;
+	}
+
 	if (WIFSIGNALED(status)) {
 		logparent(CM_INFO,
 			  "%s[%d] exited due to signal %d with status %d\n",
@@ -697,7 +708,7 @@ static void handle_child_signal(void)
 				  WEXITSTATUS(status));
 		}
 	}
-	child_pid = 0;
+	child_pid = -1;
 	if (pty_fd >= 0) {
 		logparent(CM_INFO, "closing pty_fd (%d)\n", pty_fd);
 		close(pty_fd);
