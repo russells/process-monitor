@@ -14,7 +14,6 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <pty.h>
-#include <time.h>
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
@@ -828,7 +827,6 @@ static void start_child(void)
 {
 	pid_t pid;
 	int forkpty_errno;
-	struct timespec ts = { 0, 100000 }; /* 0.1milliseconds */
 
 	logparent(CM_INFO, "starting %s\n", child_args[0]);
 
@@ -861,16 +859,11 @@ static void start_child(void)
 	if (child_uid && setuid(child_uid)) {
 		logparent(CM_WARN, "cannot setuid(%d): %s\n",
 			  (int)child_uid, strerror(errno));
-		/* This sleep is to try to ensure that all our output has gone
-		   to the parent.  There is probably a proper way to do
-		   that. */
-		nanosleep(&ts, NULL);
 		exit(99);
 	}
 	if (execv(child_args[0], child_args)) {
 		logparent(CM_WARN, "cannot exec %s: %s\n",
 			  child_args[0], strerror(errno));
-		nanosleep(&ts, NULL);
 		exit(99);
 	}
 }
