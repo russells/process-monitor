@@ -39,5 +39,5 @@ endif
 
 .PHONY: clean
 clean:
-	rm -f $(PROGRAM) $(OBJS) $(DEPS) $(PROGRAM_MAN)
+	rm -f $(PROGRAM) *.o *.d $(PROGRAM_MAN)
 
