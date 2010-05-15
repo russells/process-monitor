@@ -4,6 +4,10 @@
 PROGRAM = child-monitor
 SRCS = child-monitor.c is_daemon.c log.c envlist.c
 
+PREFIX ?= $(HOME)
+BIN_PATH = $(PREFIX)/bin
+MAN_PATH = $(PREFIX)/share/man/man1
+
 OBJS = $(SRCS:.c=.o)
 DEPS = $(SRCS:.c=.d)
 DEPDEPS = Makefile
@@ -29,8 +33,9 @@ all: $(PROGRAM) $(PROGRAM_MAN)
 $(PROGRAM): $(OBJS)
 
 install: all
-	cp $(PROGRAM) /usr/local/bin/
-	cp $(PROGRAM_MAN) /usr/local/share/man/man1/
+	install -d $(BIN_PATH) $(MAN_PATH)
+	install $(PROGRAM) $(BIN_PATH)
+	install $(PROGRAM_MAN) $(MAN_PATH)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
