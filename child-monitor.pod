@@ -85,8 +85,10 @@ specified with I<-M>.
 =item --pid-file I<pidfile>
 
 With the -d or --daemon flag, makes B<child-monitor> write its PID to
-I<pidfile> after it goes into the background.  Without -d or --daemon,
-B<child-monitor> does not write to I<pidfile>.
+F<pidfile> after it goes into the background.  Without -d or --daemon,
+B<child-monitor> does not write to F<pidfile>.
+
+If I<pidfile> cannot be written to, B<child-monitor> will exit.
 
 =item -u I<user>
 

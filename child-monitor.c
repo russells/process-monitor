@@ -440,8 +440,9 @@ static void go_daemon(void)
 		pid_file_file = fopen(pid_file, "w");
 		if (! pid_file_file) {
 			logparent(CM_WARN,
-				  "cannot open %s for writing: %s\n",
+				  "exiting since I cannot open %s for writing: %s\n",
 				  pid_file, strerror(errno));
+			exit(1);
 		} else {
 			fprintf(pid_file_file, "%d\n", (int)getpid());
 			fclose(pid_file_file);
