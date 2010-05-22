@@ -31,6 +31,7 @@ static void set_signal_handlers(void);
 static void monitor_child(void);
 static void read_signal_command_pipe(void);
 static void read_pty_fd(void);
+static void delete_pid_file(void);
 static void start_child(void);
 static void set_child_wait_time(void);
 static void make_signal_pipe(void);
@@ -439,14 +440,21 @@ static void go_daemon(void)
 
 		pid_file_file = fopen(pid_file, "w");
 		if (! pid_file_file) {
-			logparent(CM_WARN,
-				  "exiting since I cannot open %s for writing: %s\n",
+			logparent(CM_ERROR,
+				  "cannot open %s for writing: %s\n",
 				  pid_file, strerror(errno));
+			logparent(CM_ERROR, "exiting\n");
 			exit(1);
-		} else {
-			fprintf(pid_file_file, "%d\n", (int)getpid());
-			fclose(pid_file_file);
 		}
+		if (0 > fprintf(pid_file_file, "%d\n", (int)getpid())) {
+			logparent(CM_ERROR,
+				  "cannot write to %s: %s\n",
+				  pid_file, strerror(errno));
+			logparent(CM_ERROR, "exiting\n");
+			exit(1);
+		}
+		fclose(pid_file_file);
+		atexit(delete_pid_file);
 	}
 }
 
@@ -911,4 +919,15 @@ static void signal_handler(int sig)
 	write(signal_command_pipe[1], &c, 1);
 }
 
+
+static void delete_pid_file(void)
+{
+	if (! pid_file) {
+		return;
+	}
+	if (unlink(pid_file)) {
+		logparent(CM_WARN, "cannot unlink %s: %s\n",
+			  pid_file, strerror(errno));
+	}
+}
 
