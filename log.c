@@ -9,6 +9,8 @@
 char *child_log_name = NULL;
 char *parent_log_name = NULL;
 
+static char *log_ident = NULL;
+
 
 static void vlogmsg(int level, char *name, char *format, va_list va);
 
@@ -60,6 +62,14 @@ static void vlogmsg(int level, char *name, char *format, va_list va)
 		case CM_INFO:  syslog_level = LOG_INFO;    break;
 		case CM_WARN:  syslog_level = LOG_WARNING; break;
 		case CM_ERROR: syslog_level = LOG_ERR;     break;
+		}
+		/* On Linux, this does not reopen the syslog connection each
+		   time we change between logging child and parent messages.
+		   It seems to only save a copy of log_ident (the pointer, not
+		   the string).  Other systems may act differently. */
+		if (! log_ident || (log_ident != name)) {
+			log_ident = name;
+			openlog(log_ident, LOG_PID, LOG_DAEMON);
 		}
 		syslog(syslog_level|LOG_DAEMON, "%s", msg);
 	} else {

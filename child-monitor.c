@@ -262,8 +262,6 @@ int main(int argc, char **argv)
 
 	make_signal_pipe();
 	if (go_daemon_flag) {
-		/* Open the log first, for error messages in go_daemon(). */
-		openlog(child_log_name, LOG_PID, LOG_DAEMON);
 		go_daemon();
 	}
 	set_signal_handlers();
