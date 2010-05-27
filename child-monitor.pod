@@ -27,8 +27,7 @@ processing.  It's probably better to always include I<-->.
 =item --daemon
 
 Go into the background before running I<child>.  This changes the handling of
-SIGHUP, since that signal is commonly used by daemons to tell them to re-read
-configuration.
+SIGHUP and SIGINT - see the SIGNAL HANDLING section.
 
 =item -C
 
@@ -103,23 +102,49 @@ users will be able to set gid if they are members of that group.
 
 =head1 SIGNAL HANDLING
 
-SIGINT and SIGTERM are handled by the parent, and immediately sent to the child
-when they happen.  After sending these signals, the child is not restarted
-again, and B<child-monitor> exits the next time that the child exits.
+=over
 
-When run in the foreground, SIGHUP is handled the same way as SIGINT and
-SIGTERM.  When run as a daemon (-d or --daemon), SIGHUP is passed to the child,
-and B<child-monitor> continues as normal.
+=item SIGTERM
+
+SIGTERM is handled by the parent, and immediately sent to the child when it
+happens.  After sending this signal, the child is not restarted again, and
+B<child-monitor> exits the next time that the child exits.
+
+=item SIGINT and SIGHUP
+
+SIGHUP is commonly used by daemons to tell them to re-read configuration, so
+when running as a daemon, we pass SIGHUP to the child and do nothing else.
+
+When not running as a daemon, we pass SIGHUP to the child and exit when it
+does.
+
+SIGINT is handled in the same way as SIGHUP.
+
+When running as a daemon, neither of these signals change the behaviour of
+B<child-monitor> when the child exits.  If we would have restarted it before
+the signal, then we will still restart it after the signal.  If we would have
+exited on child exit before the signal, then we will do so after the signal.
+
+=item SIGUSR1
 
 SIGUSR1 tells B<child-monitor> to stop monitoring the child process.  After
 this signal, the child process will not be restarted if it exits.
 
-SIGUSR2 tells B<child-monitor> to continue monitoring the child process.  If
-the child is still running, B<child-monitor> does nothing.  If it is not
-running, it is restarted.
+=item SIGUSR2
 
-SIGCHLD is handled for child process management, and SIGALRM is used for child
-process restart timeouts.
+SIGUSR2 tells B<child-monitor> to begin monitoring the child process.  If the
+child is still running, B<child-monitor> does nothing.  If it is not running,
+it is restarted.
+
+=item SIGCHLD
+
+SIGCHLD is handled for child process management
+
+=item SIGALRM
+
+SIGALRM is used for child process restart timeouts.
+
+=back
 
 =head1 CONFIGURATION FILE
 

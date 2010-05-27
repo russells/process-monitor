@@ -782,20 +782,38 @@ static void handle_hup_signal(void)
 
 
 /**
- * Pass SIGINT to the child, and don't restart it if it exits.
+ * Pass SIGINT to the child.  If we're a daemon, restart the child if it exits
+ * or exit when the child exits only if we were going to do that anyway (ie
+ * don't change that behaviour because we got SIGINT).  If we're not a daemon,
+ * don't restart the child when it exits, and exit ourselves then.
  */
 static void handle_int_signal(void)
 {
 	if (child_pid <= 0) {
-		logparent(CM_INFO, "exiting on SIGINT\n");
-		exit(1);
+		if (is_daemon) {
+			logparent(CM_INFO, "SIGINT but no child process (%s)\n",
+				  child_args[0]);
+		} else {
+			logparent(CM_INFO, "exiting on SIGINT\n");
+			exit(1);
+		}
+		return;
 	}
 
-	logparent(CM_INFO, "passing SIGINT to %s[%d]\n",
-		  child_args[0], child_pid);
-	kill(child_pid, SIGINT);
-	do_restart = 0;
-	do_exit = 1;
+	/* We have a child process. */
+	if (is_daemon) {
+		logparent(CM_INFO, "passing SIGINT to %s[%d]\n",
+			  child_args[0], child_pid);
+		kill(child_pid, SIGINT);
+		/* Don't change do_restart and do_exit. */
+	} else {
+		kill(child_pid, SIGINT);
+		/* If we're not a daemon, then probably the user typed ^C on
+		   our terminal, so when the child process exits, we should
+		   also exit. */
+		do_restart = 0;
+		do_exit = 1;
+	}
 }
 
 
