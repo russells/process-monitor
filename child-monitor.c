@@ -108,9 +108,9 @@ int main(int argc, char **argv)
 
 	slashptr = strrchr(argv[0], '/');
 	if (slashptr)
-		parent_log_name = slashptr + 1;
+		set_parent_log_name(slashptr + 1);
 	else
-		parent_log_name = argv[0];
+		set_parent_log_name(argv[0]);
 
 	while (1) {
 		c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -133,10 +133,10 @@ int main(int argc, char **argv)
 			usage(0);
 			break;
 		case 'L':
-			child_log_name = optarg;
+			set_child_log_name(optarg);
 			break;
 		case 'l':
-			parent_log_name = optarg;
+			set_parent_log_name(optarg);
 			break;
 		case 'M':
 			max_child_wait_time = (int)strtol(optarg, &endptr, 10);
@@ -169,11 +169,11 @@ int main(int argc, char **argv)
 			if (isprint(c))
 				fprintf(stderr,
 					"%s: unknown option char '%c'\n",
-					parent_log_name, c);
+					get_parent_log_name(), c);
 			else
 				fprintf(stderr,
 					"%s: unknown option char 0x%02x\n",
-					parent_log_name, c);
+					get_parent_log_name(), c);
 			exit(1);
 			break;
 		}
@@ -249,14 +249,16 @@ int main(int argc, char **argv)
 	}
 
 	if (! argv[optind]) {
-		fprintf(stderr, "%s: need a program to run.\n", parent_log_name);
+		fprintf(stderr, "%s: need a program to run.\n",
+			get_parent_log_name());
 		exit(1);
 	}
-	if (! child_log_name) {
-		child_log_name = argv[optind];
-		slashptr = strrchr(child_log_name, '/');
+	if (get_child_log_ident() == NULL) {
+		slashptr = strrchr(argv[optind], '/');
 		if (slashptr)
-			child_log_name = slashptr + 1;
+			set_child_log_name(slashptr + 1);
+		else
+			set_child_log_name(argv[optind]);
 	}
 	child_args = argv + optind;
 
@@ -341,7 +343,7 @@ Usage: %s [args] [--] childpath [child_args...]\n\
   -u|--user <user>            User to run child as (name or uid)\n\
                                 (can be user:group)\n\
   -- is required if childpath or any of child_args begin with -\n",
-		parent_log_name);
+		get_parent_log_name());
 	exit(exitcode);
 }
 
@@ -879,6 +881,7 @@ static void start_child(void)
 		/* parent */
 		/* logparent(CM_INFO, "after forkpty, pty_fd==%d\n", pty_fd); */
 		child_pid = pid;
+		set_child_log_pid(child_pid);
 		fcntl(pty_fd, F_SETFL, O_NONBLOCK);
 		return;
 	}
@@ -912,7 +915,7 @@ static void make_signal_pipe(void)
 	ret = pipe(signal_command_pipe);
 	if (-1 == ret) {
 		fprintf(stderr, "%s: cannot make pipe: %s\n",
-			parent_log_name, strerror(errno));
+			get_parent_log_name(), strerror(errno));
 		exit(2);
 	}
 	fcntl(signal_command_pipe[0], F_SETFL, O_NONBLOCK);

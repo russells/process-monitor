@@ -3,6 +3,7 @@
 #ifndef __log_h__
 #define __log_h__
 
+#include <sys/types.h>
 
 enum level {
 	CM_INFO,
@@ -10,8 +11,14 @@ enum level {
 	CM_ERROR,
 };
 
-extern char *child_log_name;
-extern char *parent_log_name;
+
+void set_parent_log_name(const char *name);
+void set_child_log_name(const char *name);
+void set_child_log_pid(pid_t pid);
+const char *get_parent_log_ident(void);
+const char *get_parent_log_name(void);
+const char *get_child_log_ident(void);
+const char *get_child_log_name(void);
 
 /**
  * Log a message from the parent process.
