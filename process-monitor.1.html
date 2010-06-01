@@ -1,0 +1,247 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>process-monitor - run a child process and restart it when it exits.</title>
+<link rel="stylesheet" href="process-monitor.css" type="text/css" />
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@localhost" />
+</head>
+
+<body>
+
+
+<!-- INDEX BEGIN -->
+<div name="index">
+<p><a name="__index__"></a></p>
+
+<ul>
+
+	<li><a href="#name">NAME</a></li>
+	<li><a href="#synopsis">SYNOPSIS</a></li>
+	<li><a href="#description">DESCRIPTION</a></li>
+	<li><a href="#options">OPTIONS</a></li>
+	<li><a href="#signal_handling">SIGNAL HANDLING</a></li>
+	<li><a href="#configuration_file">CONFIGURATION FILE</a></li>
+	<li><a href="#examples">EXAMPLES</a></li>
+	<li><a href="#bugs">BUGS</a></li>
+	<li><a href="#author">AUTHOR</a></li>
+	<li><a href="#copyright">COPYRIGHT</a></li>
+	<li><a href="#version">VERSION</a></li>
+	<li><a href="#see_also">SEE ALSO</a></li>
+</ul>
+
+<hr name="index" />
+</div>
+<!-- INDEX END -->
+
+<p>
+</p>
+<h1><a name="name">NAME</a></h1>
+<p>process-monitor - run a child process and restart it when it exits.</p>
+<p>
+</p>
+<hr />
+<h1><a name="synopsis">SYNOPSIS</a></h1>
+<p><strong>process-monitor</strong> <em>[options]</em> <strong>[--]</strong> <em>child [child_args...]</em></p>
+<p>
+</p>
+<hr />
+<h1><a name="description">DESCRIPTION</a></h1>
+<p><strong>process-monitor</strong> runs another program as a child process.  The child process
+will be restarted when it exits, with delays to prevent continuous restarting.
+Appropriate signals are passed to the child.</p>
+<p><em>child</em> is a path to an executable.  <em>child_args</em> are any number of arguments
+that will be passed to the child.</p>
+<p><em>--</em> is required if any of <em>child_args</em> begins with '<em>-</em>' due to option
+processing.  It's probably better to always include <em>--</em>.</p>
+<p>
+</p>
+<hr />
+<h1><a name="options">OPTIONS</a></h1>
+<dl>
+<dt><strong><a name="d" class="item">-d</a></strong></dt>
+
+<dt><strong><a name="daemon" class="item">--daemon</a></strong></dt>
+
+<dd>
+<p>Go into the background before running <em>child</em>.  This changes the handling of
+SIGHUP and SIGINT - see the SIGNAL HANDLING section.</p>
+</dd>
+<dt><strong><a name="c" class="item">-C</a></strong></dt>
+
+<dt><strong><a name="clear_env" class="item">--clear-env</a></strong></dt>
+
+<dd>
+<p>Clear the environment before setting any variables specified by -E.</p>
+</dd>
+<dt><strong><a name="e_name_value" class="item">-E NAME=VALUE</a></strong></dt>
+
+<dt><strong><a name="env_name_value" class="item">--env NAME=VALUE</a></strong></dt>
+
+<dd>
+<p>Pass this environment variable to the child process.  To unset a variable, omit
+the '=VALUE'.</p>
+</dd>
+<dt><strong><a name="e_emailaddress" class="item">-e <em>emailaddress</em></a></strong></dt>
+
+<dt><strong><a name="email_emailaddress" class="item">--email <em>emailaddress</em></a></strong></dt>
+
+<dd>
+<p>Send email to <em>emailaddress</em> when restarting <em>child</em>.  (Not implemented.)</p>
+</dd>
+<dt><strong><a name="l_name" class="item">-L <em>name</em></a></strong></dt>
+
+<dt><strong><a name="child_log_name_name" class="item">--child-log-name <em>name</em></a></strong></dt>
+
+<dd>
+<p>Use <em>name</em> in messages from the child process.  Defaults to the last path
+component of <em>child</em>.</p>
+</dd>
+<dt><strong><a name="l_name" class="item">-l <em>name</em></a></strong></dt>
+
+<dt><strong><a name="log_name_name" class="item">--log-name <em>name</em></a></strong></dt>
+
+<dd>
+<p>Use <em>name</em> in messages from <strong>process-monitor</strong>.  This enables messages from
+different <strong>process-monitor</strong> processes to be distinguished in syslog.  Defaults
+to the last path component of the name that was used to start
+<strong>process-monitor</strong>.</p>
+</dd>
+<dt><strong><a name="m_time" class="item">-M <em>time</em></a></strong></dt>
+
+<dt><strong><a name="max_wait_time_time" class="item">--max-wait-time <em>time</em></a></strong></dt>
+
+<dd>
+<p>Specify the maximum time to wait between child restarts as <em>time</em>, in seconds.</p>
+</dd>
+<dt><strong><a name="m_time" class="item">-m <em>time</em></a></strong></dt>
+
+<dt><strong><a name="min_wait_time_time" class="item">--min-wait-time <em>time</em></a></strong></dt>
+
+<dd>
+<p>Specify the minimum time to wait between child restarts as <em>time</em>, in seconds.
+<strong>process-monitor</strong> will always wait at least one second between restarts.</p>
+<p>The wait time starts at <em>time</em>, and doubles for each start, up to the maximum
+specified with <em>-M</em>.</p>
+</dd>
+<dt><strong><a name="p_pidfile" class="item">-p <em>pidfile</em></a></strong></dt>
+
+<dt><strong><a name="pid_file_pidfile" class="item">--pid-file <em>pidfile</em></a></strong></dt>
+
+<dd>
+<p>With the -d or --daemon flag, makes <strong>process-monitor</strong> write its PID to
+<em class="file">pidfile</em> after it goes into the background.  Without -d or --daemon,
+<strong>process-monitor</strong> does not write to <em class="file">pidfile</em>.</p>
+<p>If <em>pidfile</em> cannot be written to, <strong>process-monitor</strong> will exit.</p>
+</dd>
+<dt><strong><a name="u_user" class="item">-u <em>user</em></a></strong></dt>
+
+<dt><strong><a name="user_user" class="item">--user <em>user</em></a></strong></dt>
+
+<dd>
+<p>Run the child as <em>user</em>, which can be a name or uid.  A group can be specified
+by saying <code>user:group</code>, or only a group can be specified by saying <code>:group</code>.
+Normally only the superuser will be able to set the uid and gid, although other
+users will be able to set gid if they are members of that group.</p>
+</dd>
+</dl>
+<p>
+</p>
+<hr />
+<h1><a name="signal_handling">SIGNAL HANDLING</a></h1>
+<dl>
+<dt><strong><a name="sigterm" class="item">SIGTERM</a></strong></dt>
+
+<dd>
+<p>SIGTERM is handled by the parent, and immediately sent to the child when it
+happens.  After sending this signal, the child is not restarted again, and
+<strong>process-monitor</strong> exits the next time that the child exits.</p>
+</dd>
+<dt><strong><a name="sigint_and_sighup" class="item">SIGINT and SIGHUP</a></strong></dt>
+
+<dd>
+<p>SIGHUP is commonly used by daemons to tell them to re-read configuration, so
+when running as a daemon, we pass SIGHUP to the child and do nothing else.</p>
+<p>When not running as a daemon, we pass SIGHUP to the child and exit when it
+does.</p>
+<p>SIGINT is handled in the same way as SIGHUP.</p>
+<p>When running as a daemon, neither of these signals change the behaviour of
+<strong>process-monitor</strong> when the child exits.  If we would have restarted it before
+the signal, then we will still restart it after the signal.  If we would have
+exited on child exit before the signal, then we will do so after the signal.</p>
+</dd>
+<dt><strong><a name="sigusr1" class="item">SIGUSR1</a></strong></dt>
+
+<dd>
+<p>SIGUSR1 tells <strong>process-monitor</strong> to stop monitoring the child process.  After
+this signal, the child process will not be restarted if it exits.</p>
+</dd>
+<dt><strong><a name="sigusr2" class="item">SIGUSR2</a></strong></dt>
+
+<dd>
+<p>SIGUSR2 tells <strong>process-monitor</strong> to begin monitoring the child process.  If the
+child is still running, <strong>process-monitor</strong> does nothing.  If it is not running,
+it is restarted.</p>
+</dd>
+<dt><strong><a name="sigchld" class="item">SIGCHLD</a></strong></dt>
+
+<dd>
+<p>SIGCHLD is handled for child process management</p>
+</dd>
+<dt><strong><a name="sigalrm" class="item">SIGALRM</a></strong></dt>
+
+<dd>
+<p>SIGALRM is used for child process restart timeouts.</p>
+</dd>
+</dl>
+<p>
+</p>
+<hr />
+<h1><a name="configuration_file">CONFIGURATION FILE</a></h1>
+<p>Needs one?</p>
+<p>
+</p>
+<hr />
+<h1><a name="examples">EXAMPLES</a></h1>
+<dl>
+<dt><strong><a name="run_ls" class="item">Run ls?</a></strong></dt>
+
+<dd>
+<pre>
+ process-monitor -- /bin/ls</pre>
+</dd>
+</dl>
+<p>
+</p>
+<hr />
+<h1><a name="bugs">BUGS</a></h1>
+<p>??</p>
+<p>
+</p>
+<hr />
+<h1><a name="author">AUTHOR</a></h1>
+<p>Russell Steicke &lt;<a href="mailto:russells@adelie.cx">russells@adelie.cx</a>&gt;</p>
+<p>
+</p>
+<hr />
+<h1><a name="copyright">COPYRIGHT</a></h1>
+<p>Copyright (C) 2010 Russell Steicke.  Released under the terms of the GNU
+General Public License, but dedicated to the public domain at the beginning of
+the tenth calendar year after publishing (ie the start of 2020 for version 0.1).</p>
+<p>This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.</p>
+<p>
+</p>
+<hr />
+<h1><a name="version">VERSION</a></h1>
+<p>0.1</p>
+<p>
+</p>
+<hr />
+<h1><a name="see_also">SEE ALSO</a></h1>
+<p><code>init(8)</code>, <code>upstart(8)</code>.</p>
+
+</body>
+
+</html>
