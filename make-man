@@ -1,4 +1,4 @@
 #!/bin/sh -x
 
-git cat-file blob master:process-monitor.pod | pod2html --css process-monitor.css > process-monitor.1.html
+git cat-file blob master:process-monitor.pod | pod2html --css a.css | grep -v '<\<hr\>' > process-monitor.1.html
 
