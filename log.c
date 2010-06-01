@@ -24,7 +24,11 @@ static const char *log_ident = NULL;
 static void format_parent_log_ident(pid_t pid);
 static void format_child_log_ident(void);
 static void vlogmsg(int level, const char const *name,
-		    const char const *format, va_list va);
+		    const char const *format, va_list va)
+#ifdef __GNUC__
+	__attribute__ ((format (printf, 3, 0)))
+#endif
+	;
 
 
 /**

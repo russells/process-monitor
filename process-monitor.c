@@ -362,7 +362,7 @@ static void setup_env()
 			ret = putenv(*envvars);
 			if (-1 == ret) {
 				logchild(CM_WARN,
-					 "error   setting %s\n", envvars);
+					 "error   setting %s\n", *envvars);
 			}
 			envvars++;
 		}
@@ -373,7 +373,7 @@ static void setup_env()
 			ret = unsetenv(*envvars);
 			if (-1 == ret) {
 				logchild(CM_WARN,
-					 "error unsetting %s\n", envvars);
+					 "error unsetting %s\n", *envvars);
 			}
 			envvars++;
 		}

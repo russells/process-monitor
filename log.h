@@ -23,10 +23,19 @@ const char *get_child_log_name(void);
 /**
  * Log a message from the parent process.
  */
-void logparent(int level, char *format, ...);
+void logparent(int level, char *format, ...)
+#ifdef __GNUC__
+	__attribute__ ((format (printf, 2, 3)))
+#endif
+	;
+
 /**
  * Log a message from the child process.
  */
-void logchild(int level, char *format, ...);
+void logchild(int level, char *format, ...)
+#ifdef __GNUC__
+	__attribute__ ((format (printf, 2, 3)))
+#endif
+	;
 
 #endif
