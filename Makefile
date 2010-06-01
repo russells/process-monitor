@@ -1,8 +1,8 @@
-# Makefile for child-monitor.
+# Makefile for process-monitor.
 # Russell Steicke, 2010-04-29.
 
-PROGRAM = child-monitor
-SRCS = child-monitor.c is_daemon.c log.c envlist.c xmalloc.c
+PROGRAM = process-monitor
+SRCS = process-monitor.c is_daemon.c log.c envlist.c xmalloc.c
 
 PREFIX ?= $(HOME)
 BIN_PATH = $(PREFIX)/bin

@@ -1,14 +1,14 @@
 =head1 NAME
 
-child-monitor - run a child process and restart it when it exits.
+process-monitor - run a child process and restart it when it exits.
 
 =head1 SYNOPSIS
 
-B<child-monitor> I<[options]> B<[--]> I<child [child_args...]>
+B<process-monitor> I<[options]> B<[--]> I<child [child_args...]>
 
 =head1 DESCRIPTION
 
-B<child-monitor> runs another program as a child process.  The child process
+B<process-monitor> runs another program as a child process.  The child process
 will be restarted when it exits, with delays to prevent continuous restarting.
 Appropriate signals are passed to the child.
 
@@ -59,9 +59,10 @@ component of I<child>.
 
 =item --log-name I<name>
 
-Use I<name> in messages from B<child-monitor>.  This enables messages from
-different B<child-monitor> processes to be distinguished in syslog.  Defaults
-to the last path component of the name that was used to start B<child-monitor>.
+Use I<name> in messages from B<process-monitor>.  This enables messages from
+different B<process-monitor> processes to be distinguished in syslog.  Defaults
+to the last path component of the name that was used to start
+B<process-monitor>.
 
 =item -M I<time>
 
@@ -74,7 +75,7 @@ Specify the maximum time to wait between child restarts as I<time>, in seconds.
 =item --min-wait-time I<time>
 
 Specify the minimum time to wait between child restarts as I<time>, in seconds.
-B<child-monitor> will always wait at least one second between restarts.
+B<process-monitor> will always wait at least one second between restarts.
 
 The wait time starts at I<time>, and doubles for each start, up to the maximum
 specified with I<-M>.
@@ -83,11 +84,11 @@ specified with I<-M>.
 
 =item --pid-file I<pidfile>
 
-With the -d or --daemon flag, makes B<child-monitor> write its PID to
+With the -d or --daemon flag, makes B<process-monitor> write its PID to
 F<pidfile> after it goes into the background.  Without -d or --daemon,
-B<child-monitor> does not write to F<pidfile>.
+B<process-monitor> does not write to F<pidfile>.
 
-If I<pidfile> cannot be written to, B<child-monitor> will exit.
+If I<pidfile> cannot be written to, B<process-monitor> will exit.
 
 =item -u I<user>
 
@@ -108,7 +109,7 @@ users will be able to set gid if they are members of that group.
 
 SIGTERM is handled by the parent, and immediately sent to the child when it
 happens.  After sending this signal, the child is not restarted again, and
-B<child-monitor> exits the next time that the child exits.
+B<process-monitor> exits the next time that the child exits.
 
 =item SIGINT and SIGHUP
 
@@ -121,19 +122,19 @@ does.
 SIGINT is handled in the same way as SIGHUP.
 
 When running as a daemon, neither of these signals change the behaviour of
-B<child-monitor> when the child exits.  If we would have restarted it before
+B<process-monitor> when the child exits.  If we would have restarted it before
 the signal, then we will still restart it after the signal.  If we would have
 exited on child exit before the signal, then we will do so after the signal.
 
 =item SIGUSR1
 
-SIGUSR1 tells B<child-monitor> to stop monitoring the child process.  After
+SIGUSR1 tells B<process-monitor> to stop monitoring the child process.  After
 this signal, the child process will not be restarted if it exits.
 
 =item SIGUSR2
 
-SIGUSR2 tells B<child-monitor> to begin monitoring the child process.  If the
-child is still running, B<child-monitor> does nothing.  If it is not running,
+SIGUSR2 tells B<process-monitor> to begin monitoring the child process.  If the
+child is still running, B<process-monitor> does nothing.  If it is not running,
 it is restarted.
 
 =item SIGCHLD
@@ -156,7 +157,7 @@ Needs one?
 
 =item Run ls?
 
- child-monitor -- /bin/ls
+ process-monitor -- /bin/ls
 
 =back
 

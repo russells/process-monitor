@@ -1,4 +1,4 @@
 *.d
 *.o
-child-monitor
-child-monitor.1
+process-monitor
+process-monitor.1

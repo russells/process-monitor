@@ -725,7 +725,7 @@ static void handle_child_signal(void)
 	}
 
 	if (do_exit) {
-		logparent(CM_INFO, "child-monitor exiting\n");
+		logparent(CM_INFO, "process-monitor exiting\n");
 		exit(0);
 	}
 
