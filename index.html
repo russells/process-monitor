@@ -11,15 +11,37 @@
 
 Monitor a child process and restart it if required.
 
-<h1>Source</h1>
+<h1>Features</h1>
 
-<a href="http://github.com/russells/process-monitor">Github</a>
+<h2>Current</h2>
+
+<ul>
+  <li>Run in the foreground or as a daemon.</li>
+  <li>Writes child process stdout and stderr to syslog when running as a daemon.</li>
+  <li>Delay between restarts, with backoff.</li>
+  <li>Set environment variables before running the child.</li>
+  <li>Clear the child process environment (before setting the specified variables.)</li>
+  <li>Run the child process with a different uid and gid.</li>
+  <li>Passes appropriate signals to the child process (SIGHUP, SIGINT, SIGTERM.)</li>
+  <li>Can be told to stop monitoring the child process, and to re-start monitoring it later.</li>
+</ul>
+
+<h2>Upcoming</h2>
+
+<ul>
+  <li>Send email when child exits or is restarted.</li>
+  <li>Autoconf?</li>
+</ul>
 
 <h1>Documentation</h1>
 
 <a href="process-monitor.1.html">Man page</a>.
 
+<h1>Source</h1>
+
+<a href="http://github.com/russells/process-monitor">Github</a>
+
 <hr>
 <address></address>
-<font size=-2><!-- hhmts start -->Last modified: Tue Jun  1 18:39:38 WST 2010 <!-- hhmts end --></font>
+<font size=-2><!-- hhmts start -->Last modified: Wed Jun  2 10:52:29 WST 2010 <!-- hhmts end --></font>
 </body> </html>
