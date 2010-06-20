@@ -301,7 +301,6 @@ static void get_user_and_group_names(char *names)
 			exit(1);
 		}
 		child_username = username;
-		fprintf(stderr, "username  %s\n", child_username);
 	}
 	if (groupname) {
 		if (child_groupname) {
@@ -311,7 +310,6 @@ static void get_user_and_group_names(char *names)
 			exit(1);
 		}
 		child_groupname = groupname;
-		fprintf(stderr, "groupname %s\n", child_groupname);
 	}
 }
 
