@@ -22,6 +22,14 @@ processing.  It's probably better to always include I<-->.
 
 =over
 
+=item -D I<dirname>
+
+=item --dir I<dirname>
+
+Run the child process with its current directory set to I<dirname>.
+B<process-monitor> itself still runs with its current directory unchanged, or
+set to F</> if running as a daemon.
+
 =item -d
 
 =item --daemon

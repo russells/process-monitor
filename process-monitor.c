@@ -55,6 +55,7 @@ static void handle_usr1_signal(void);
 static void handle_usr2_signal(void);
 
 
+static char *           child_dir = NULL;
 static int              go_daemon_flag = 0;
 static char *           email_address = NULL;
 static char **          child_args = NULL;
@@ -83,8 +84,9 @@ static gid_t            child_gid = 0;
 static char *           child_groupname = NULL;
 
 
-static const char *short_options = "dCE:e:hL:l:M:m:p:u:";
+static const char *short_options = "D:dCE:e:hL:l:M:m:p:u:";
 static struct option long_options[] = {
+	{ "dir"           , 1, NULL, 'D' },
 	{ "daemon"        , 0, NULL, 'd' },
 	{ "clear-env"     , 0, NULL, 'C' },
 	{ "email"         , 1, NULL, 'e' },
@@ -117,6 +119,9 @@ int main(int argc, char **argv)
 		if (c == -1)
 			break;
 		switch (c) {
+		case 'D':
+			child_dir = optarg;
+			break;
 		case 'd':
 			go_daemon_flag = 1;
 			break;
@@ -896,6 +901,11 @@ static void start_child(void)
 	if (child_uid && setuid(child_uid)) {
 		logparent(CM_WARN, "cannot setuid(%d): %s\n",
 			  (int)child_uid, strerror(errno));
+		exit(99);
+	}
+	if (child_dir && chdir(child_dir)) {
+		logparent(CM_ERROR, "cannot chdir() to %s: %s\n",
+			  child_dir, strerror(errno));
 		exit(99);
 	}
 	if (execv(child_args[0], child_args)) {
