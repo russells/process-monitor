@@ -273,7 +273,7 @@ int main(int argc, char **argv)
 	}
 	set_signal_handlers();
 	monitor_child();
-	logparent(CM_WARN, "monitor_child() returned."
+	logparent(CM_ERROR, "monitor_child() returned."
 		  "  This should not happen.\n");
 	exit(88);
 }
@@ -876,7 +876,7 @@ static void start_child(void)
 
 	if (-1 == pid) {
 		child_pid = -1;
-		logparent(CM_WARN, "cannot fork: %s\n",
+		logparent(CM_ERROR, "cannot fork: %s\n",
 			  strerror(forkpty_errno));
 		child_wait_time = 60;
 		return;
@@ -899,7 +899,7 @@ static void start_child(void)
 		exit(99);
 	}
 	if (child_uid && setuid(child_uid)) {
-		logparent(CM_WARN, "cannot setuid(%d): %s\n",
+		logparent(CM_ERROR, "cannot setuid(%d): %s\n",
 			  (int)child_uid, strerror(errno));
 		exit(99);
 	}
@@ -909,7 +909,7 @@ static void start_child(void)
 		exit(99);
 	}
 	if (execv(child_args[0], child_args)) {
-		logparent(CM_WARN, "cannot exec %s: %s\n",
+		logparent(CM_ERROR, "cannot exec %s: %s\n",
 			  child_args[0], strerror(errno));
 		exit(99);
 	}
