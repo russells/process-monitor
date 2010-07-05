@@ -107,6 +107,12 @@ by saying C<user:group>, or only a group can be specified by saying C<:group>.
 Normally only the superuser will be able to set the uid and gid, although other
 users will be able to set gid if they are members of that group.
 
+=item -V
+
+=item --version
+
+Print the B<process-monitor> version and exit.
+
 =back
 
 =head1 SIGNAL HANDLING

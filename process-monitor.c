@@ -84,7 +84,7 @@ static gid_t            child_gid = 0;
 static char *           child_groupname = NULL;
 
 
-static const char *short_options = "D:dCE:e:hL:l:M:m:p:u:";
+static const char *short_options = "D:dCE:e:hL:l:M:m:p:u:V";
 static struct option long_options[] = {
 	{ "dir"           , 1, NULL, 'D' },
 	{ "daemon"        , 0, NULL, 'd' },
@@ -98,6 +98,7 @@ static struct option long_options[] = {
 	{ "min-wait-time" , 1, NULL, 'm' },
 	{ "pid-file"      , 1, NULL, 'p' },
 	{ "user"          , 1, NULL, 'u' },
+	{ "version"       , 0, NULL, 'V' },
 	{ 0               , 0,    0,   0 }
 };
 
@@ -166,6 +167,10 @@ int main(int argc, char **argv)
 			break;
 		case 'u':
 			get_user_and_group_names(optarg);
+			break;
+		case 'V':
+			printf("process-monitor 0.1\n");
+			exit(0);
 			break;
 		case '?':
 			exit(1);
