@@ -332,6 +332,7 @@ void usage(int exitcode)
 	 */
 	fprintf(stderr, "\
 Usage: %s [args] [--] childpath [child_args...]\n\
+  -D|--dir <dirname>          Change to <dirname> before starting child\n\
   -d|--daemon                 Go into the background\n\
                                 (changes some signal handling behaviour)\n\
   -C|--clear-env              Clear the environment before setting the vars\n\
