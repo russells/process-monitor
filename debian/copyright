@@ -1,0 +1,42 @@
+This work was packaged for Debian by:
+
+    Russell Steicke <russells@adelie.cx> on Mon, 05 Jul 2010 18:27:43 +0800
+
+It is available from:
+
+    <url:http://russells.github.com/process-monitor/>
+
+Copyright:
+
+    <Copyright (C) 2010 Russell Steicke>
+
+License:
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    This package is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition to the License:
+
+    This program and its package are dedicated to the public domain at
+    the beginning of the 10th calendar year after publishing - ie the
+    beginning of 2020 for version 0.1.
+
+On Debian systems, the complete text of the GNU General
+Public License version 2 can be found in `/usr/share/common-licenses/GPL-2'.
+
+The Debian packaging is:
+
+    Copyright (C) 2010 Russell Steicke <russells@adelie.cx>
+
+and is licensed under the GPL version 2, see above.
+

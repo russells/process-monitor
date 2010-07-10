@@ -33,12 +33,14 @@ all: $(PROGRAM) $(PROGRAM_MAN)
 $(PROGRAM): $(OBJS)
 
 install: all
-	install -d $(BIN_PATH) $(MAN_PATH)
-	install $(PROGRAM) $(BIN_PATH)
-	install $(PROGRAM_MAN) $(MAN_PATH)
+	install -d $(DESTDIR)$(BIN_PATH) $(DESTDIR)$(MAN_PATH)
+	install $(PROGRAM) $(DESTDIR)$(BIN_PATH)
+	install $(PROGRAM_MAN) $(DESTDIR)$(MAN_PATH)
 
 ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(MAKECMDGOALS),distclean)
 -include $(DEPS)
+endif
 endif
 
 
@@ -46,3 +48,9 @@ endif
 clean:
 	rm -f $(PROGRAM) *.o *.d $(PROGRAM_MAN)
 
+.PHONY: distclean
+distclean: clean
+
+.PHONY: deb
+deb:
+	git-buildpackage

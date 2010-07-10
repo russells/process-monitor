@@ -9,3 +9,10 @@ Should probably have some backoff so we don't send email continuously.
 With a different command mode for the main program (or possibly a different
 program) that can be used to send commands to the main process in order to
 control the child.
+
+* Fix the debian package source check
+
+At the end of "make deb", lintian complains about not being able to check the
+created source package.  Find out if this is a problem with the use of
+git-buildpackage, or a problem in debian/ubuntu.
+

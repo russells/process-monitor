@@ -1,0 +1,16 @@
+Source: process-monitor
+Section: admin
+Priority: extra
+Maintainer: Russell Steicke <russells@adelie.cx>
+Build-Depends: debhelper (>= 7)
+Standards-Version: 3.8.3
+Homepage: http://russells.github.com/process-monitor/
+
+Package: process-monitor
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Monitor a child process and restart it if required.
+ process-monitor runs another program as a child process.
+ The child process will be restarted when it exits, with
+ delays to prevent continuous restarting.  Appropriate
+ signals are passed to the child.
