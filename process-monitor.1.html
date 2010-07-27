@@ -138,9 +138,8 @@ specified with <em>-M</em>.</p>
 <dt><strong><a name="pid_file_pidfile" class="item">--pid-file <em>pidfile</em></a></strong></dt>
 
 <dd>
-<p>With the -d or --daemon flag, makes <strong>process-monitor</strong> write its PID to
-<em class="file">pidfile</em> after it goes into the background.  Without -d or --daemon,
-<strong>process-monitor</strong> does not write to <em class="file">pidfile</em>.</p>
+<p>Make <strong>process-monitor</strong> write its PID to <em class="file">pidfile</em>.  If running as a daemon,
+<em class="file">pidfile</em> will be written after going into the background.</p>
 <p>If <em>pidfile</em> cannot be written to, <strong>process-monitor</strong> will exit.</p>
 <p><em>pidfile</em> is deleted automatically when <strong>process-monitor</strong> exits.</p>
 </dd>
