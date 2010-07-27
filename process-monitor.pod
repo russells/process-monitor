@@ -95,9 +95,8 @@ specified with I<-M>.
 
 =item --pid-file I<pidfile>
 
-With the -d or --daemon flag, makes B<process-monitor> write its PID to
-F<pidfile> after it goes into the background.  Without -d or --daemon,
-B<process-monitor> does not write to F<pidfile>.
+Make B<process-monitor> write its PID to F<pidfile>.  If running as a daemon,
+F<pidfile> will be written after going into the background.
 
 If I<pidfile> cannot be written to, B<process-monitor> will exit.
 

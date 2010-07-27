@@ -31,6 +31,7 @@ static void set_signal_handlers(void);
 static void monitor_child(void);
 static void read_signal_command_pipe(void);
 static void read_pty_fd(void);
+static void maybe_create_pid_file(void);
 static void delete_pid_file(void);
 static void start_child(void);
 static void set_child_wait_time(void);
@@ -276,6 +277,8 @@ int main(int argc, char **argv)
 	if (go_daemon_flag) {
 		go_daemon();
 	}
+	maybe_create_pid_file();
+
 	set_signal_handlers();
 	monitor_child();
 	logparent(CM_ERROR, "monitor_child() returned."
@@ -443,27 +446,6 @@ static void go_daemon(void)
 	if (-1 == sid) {
 		logparent(LOG_CRIT, "cannot setsid(): %s\n", strerror(errno));
 		exit(2);
-	}
-	if (pid_file) {
-		FILE *pid_file_file;
-
-		pid_file_file = fopen(pid_file, "w");
-		if (! pid_file_file) {
-			logparent(CM_ERROR,
-				  "cannot open %s for writing: %s\n",
-				  pid_file, strerror(errno));
-			logparent(CM_ERROR, "exiting\n");
-			exit(1);
-		}
-		if (0 > fprintf(pid_file_file, "%d\n", (int)getpid())) {
-			logparent(CM_ERROR,
-				  "cannot write to %s: %s\n",
-				  pid_file, strerror(errno));
-			logparent(CM_ERROR, "exiting\n");
-			exit(1);
-		}
-		fclose(pid_file_file);
-		atexit(delete_pid_file);
 	}
 }
 
@@ -950,6 +932,32 @@ static void signal_handler(int sig)
 	case SIGUSR2: c = '2'; break;
 	}
 	write(signal_command_pipe[1], &c, 1);
+}
+
+
+static void maybe_create_pid_file(void)
+{
+	if (pid_file) {
+		FILE *pid_file_file;
+
+		pid_file_file = fopen(pid_file, "w");
+		if (! pid_file_file) {
+			logparent(CM_ERROR,
+				  "cannot open %s for writing: %s\n",
+				  pid_file, strerror(errno));
+			logparent(CM_ERROR, "exiting\n");
+			exit(1);
+		}
+		if (0 > fprintf(pid_file_file, "%d\n", (int)getpid())) {
+			logparent(CM_ERROR,
+				  "cannot write to %s: %s\n",
+				  pid_file, strerror(errno));
+			logparent(CM_ERROR, "exiting\n");
+			exit(1);
+		}
+		fclose(pid_file_file);
+		atexit(delete_pid_file);
+	}
 }
 
 
