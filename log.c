@@ -235,5 +235,6 @@ static void vlogmsg(int level, const char const *name,
 		else
 			f = stderr;
 		fprintf(f, "%s", msg);
+		fflush(f);
 	}
 }
