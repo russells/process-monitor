@@ -1,17 +1,21 @@
 # Makefile for process-monitor.
 # Russell Steicke, 2010-04-29.
 
-PROGRAM = process-monitor
-SRCS = process-monitor.c is_daemon.c log.c envlist.c xmalloc.c
-
 PREFIX ?= $(HOME)
 BIN_PATH = $(PREFIX)/bin
 MAN_PATH = $(PREFIX)/share/man/man1
 
-OBJS = $(SRCS:.c=.o)
-DEPS = $(SRCS:.c=.d)
+PM       = process-monitor
+PROGRAMS = $(PM)
+PM_SRCS  = process-monitor.c is_daemon.c log.c envlist.c xmalloc.c
+
+SRCS = $(PM_SRCS)
+
+PM_OBJS  = $(PM_SRCS:.c=.o)
+PM_DEPS  = $(PM_SRCS:.c=.d)
+DEPS     = $(PM_DEPS)
 DEPDEPS = Makefile
-PROGRAM_MAN = $(PROGRAM).1
+PROGRAM_MANS = $(PROGRAMS:=.1)
 
 CFLAGS = -Wall -Werror -g
 LDFLAGS = -lutil
@@ -28,14 +32,14 @@ LDFLAGS = -lutil
 
 
 .PHONY: all
-all: $(PROGRAM) $(PROGRAM_MAN)
+all: $(PROGRAMS) $(PROGRAM_MANS)
 
-$(PROGRAM): $(OBJS)
+$(PM) : $(PM_OBJS)
 
 install: all
 	install -d $(DESTDIR)$(BIN_PATH) $(DESTDIR)$(MAN_PATH)
-	install $(PROGRAM) $(DESTDIR)$(BIN_PATH)
-	install $(PROGRAM_MAN) $(DESTDIR)$(MAN_PATH)
+	install $(PROGRAMS) $(DESTDIR)$(BIN_PATH)
+	install $(PROGRAM_MANS) $(DESTDIR)$(MAN_PATH)
 
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(MAKECMDGOALS),distclean)
@@ -46,7 +50,7 @@ endif
 
 .PHONY: clean
 clean:
-	rm -f $(PROGRAM) *.o *.d $(PROGRAM_MAN)
+	rm -f $(PROGRAMS) *.o *.d $(PROGRAM_MANS)
 
 .PHONY: distclean
 distclean: clean

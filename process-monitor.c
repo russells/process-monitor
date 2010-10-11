@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <ctype.h>
 #include <getopt.h>
@@ -17,6 +18,7 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
+#include <time.h>
 
 #include "log.h"
 #include "envlist.h"
@@ -29,15 +31,26 @@ static void setup_env(void);
 static void go_daemon(void);
 static void set_signal_handlers(void);
 static void monitor_child(void);
+static void wait_in_select(void);
 static void read_signal_command_pipe(void);
+static void read_command_fifo_fd(void);
 static void read_pty_fd(void);
 static void maybe_create_pid_file(void);
 static void delete_pid_file(void);
 static void start_child(void);
 static void set_child_wait_time(void);
-static void make_signal_pipe(void);
+static void make_signal_command_pipe(void);
+static void make_command_fifo(void);
 static void signal_handler(int sig);
 static void get_user_and_group_names(char *names);
+static void send_command(void);
+static void stop_monitoring(const char *reason);
+static void start_monitoring(const char *reason);
+static void send_hup_to_child(void);
+static void send_int_to_child(void);
+static void send_kill_to_child(void);
+static void send_term_to_child(void);
+static void kill_child_and_exit(void);
 
 /*
  * These are essentially event handlers for the main loop.  The real signal
@@ -72,6 +85,10 @@ static char *           pid_file = NULL;
 static int              do_restart = 1;
 static int              do_exit = 0;
 static int              signal_command_pipe[2];
+static int              command_fifo_fd = -1;
+static int              command_fifo_write_fd = -1;
+static char *           command_fifo_name = NULL;
+static char *           command_name = NULL;
 static int              pty_fd = -1;
 #define PTY_LINE_LEN 2048
 static char             pty_data[PTY_LINE_LEN];
@@ -85,11 +102,25 @@ static gid_t            child_gid = 0;
 static char *           child_groupname = NULL;
 
 
-static const char *short_options = "D:dCE:e:hL:l:M:m:p:u:V";
+struct pmCommand { char *command; char c; };
+
+static struct pmCommand pmCommands[] = {
+	{ "start"    , '+' },
+	{ "stop"     , '-' },
+	{ "exit"     , 'x' },
+	{ "hup"      , 'h' },
+	{ "int"      , 'i' },
+	{ NULL       , '\0'}
+};
+
+
+static const char *short_options = "D:dCc:E:e:hL:l:M:m:P:p:u:V";
 static struct option long_options[] = {
 	{ "dir"           , 1, NULL, 'D' },
 	{ "daemon"        , 0, NULL, 'd' },
 	{ "clear-env"     , 0, NULL, 'C' },
+	{ "command"       , 1, NULL, 'c' },
+	{ "command-pipe"  , 1, NULL, 'P' },
 	{ "email"         , 1, NULL, 'e' },
 	{ "env"           , 1, NULL, 'E' },
 	{ "child-log-name", 1, NULL, 'L' },
@@ -130,6 +161,9 @@ int main(int argc, char **argv)
 		case 'C':
 			clear_env_flag = 1;
 			break;
+		case 'c':
+			command_name = optarg;
+			break;
 		case 'E':
 			add_env(optarg);
 			break;
@@ -165,6 +199,9 @@ int main(int argc, char **argv)
 			break;
 		case 'p':
 			pid_file = optarg;
+			break;
+		case 'P':
+			command_fifo_name = optarg;
 			break;
 		case 'u':
 			get_user_and_group_names(optarg);
@@ -260,7 +297,24 @@ int main(int argc, char **argv)
 	}
 
 	if (! argv[optind]) {
-		fprintf(stderr, "%s: need a program to run.\n",
+		if (command_name) {
+			send_command();
+			/*NOTREACHED - send_command() does not return. */
+		}
+		else {
+			fprintf(stderr,
+				"%s: need a program to run, or a command\n"
+				"  -h for help\n",
+				get_parent_log_name());
+			exit(1);
+		}
+	}
+
+	if (command_name) {
+		/* We have both a program to run and a command. */
+		fprintf(stderr,
+			"%s: Can't use a program name and a command.\n"
+			"   -h for help\n",
 			get_parent_log_name());
 		exit(1);
 	}
@@ -273,7 +327,8 @@ int main(int argc, char **argv)
 	}
 	child_args = argv + optind;
 
-	make_signal_pipe();
+	make_signal_command_pipe();
+	make_command_fifo();
 	if (go_daemon_flag) {
 		go_daemon();
 	}
@@ -335,11 +390,14 @@ void usage(int exitcode)
 	 */
 	fprintf(stderr, "\
 Usage: %s [args] [--] childpath [child_args...]\n\
+       %s -P <pipe> --command=stop|start|exit|hup|int\n\
+  -C|--clear-env              Clear the environment before setting the vars\n\
+                              specified with -E\n\
+  -c|--command <command>      Make a running process-monitor react to\n\
+                              <command>\n\
   -D|--dir <dirname>          Change to <dirname> before starting child\n\
   -d|--daemon                 Go into the background\n\
                                 (changes some signal handling behaviour)\n\
-  -C|--clear-env              Clear the environment before setting the vars\n\
-                              specified with -E\n\
   -E|--env <var=value>        Environment var for child process\n\
                                 (can use multiple times)\n\
   -e|--email <addr>           Email when child restarts\n\
@@ -351,11 +409,12 @@ Usage: %s [args] [--] childpath [child_args...]\n\
   -M|--max-wait-time <time>   Maximum time between child starts\n\
   -m|--min-wait-time <time>   Minimum time between child starts\n\
                                 (seconds, cannot be less than 1)\n\
+  -P|--command-pipe <pipe>    Open named pipe <pipe> to receive commands\n\
   -p|--pid-file <file>        Write PID to <file>, if in the background\n\
   -u|--user <user>            User to run child as (name or uid)\n\
                                 (can be user:group)\n\
   -- is required if childpath or any of child_args begin with -\n",
-		get_parent_log_name());
+		get_parent_log_name(), get_parent_log_name());
 	exit(exitcode);
 }
 
@@ -483,38 +542,62 @@ static void monitor_child(void)
 
 	start_child();
 	while (1) {
-		fd_set read_fds;
-		struct timeval timeout;
-		int ret;
-		int nfds;
+		wait_in_select();
+	}
+}
 
-		FD_ZERO(&read_fds);
-		FD_SET(signal_command_pipe[0], &read_fds);
-		nfds = signal_command_pipe[0];
-		/* logparent(CM_INFO, "--- select pty_fd==%d\n", pty_fd); */
-		if (pty_fd >= 0) {
-			FD_SET(pty_fd, &read_fds);
-			if (pty_fd > signal_command_pipe[0])
-				nfds = pty_fd;
+
+/**
+ * Do one iteration of the select() loop.
+ *
+ * This is separate from monitor_child() so that we can call it recursively
+ * when it's time to exit.  Doing that makes the main select() loop much less
+ * complex, as it does not need to know about the case where we're actively
+ * waiting for the child to die, rather than just waiting to see if it does
+ * die.
+ */
+static void wait_in_select(void)
+{
+	fd_set read_fds;
+	struct timeval timeout;
+	int ret;
+	int nfds;
+
+	FD_ZERO(&read_fds);
+	FD_SET(signal_command_pipe[0], &read_fds);
+	nfds = signal_command_pipe[0];
+	/* logparent(CM_INFO, "--- select pty_fd==%d\n", pty_fd); */
+	if (pty_fd >= 0) {
+		FD_SET(pty_fd, &read_fds);
+		if (pty_fd > nfds)
+			nfds = pty_fd;
+	}
+	if (command_fifo_fd >= 0) {
+		FD_SET(command_fifo_fd, &read_fds);
+		if (command_fifo_fd > nfds)
+			nfds = command_fifo_fd;
+	}
+	nfds++;
+	timeout.tv_sec = child_wait_time;
+	timeout.tv_usec = 0;
+	ret = select(nfds, &read_fds, 0, 0, &timeout);
+	/* logparent(CM_INFO, "--- select returns %d\n", ret); */
+	if (-1 == ret && errno != EINTR) {
+		logparent(CM_WARN, "select error: %s\n",
+			  strerror(errno));
+	}
+	/* Read data on the pty first so we don't miss any. */
+	if (pty_fd >= 0) {
+		if (FD_ISSET(pty_fd, &read_fds)) {
+			read_pty_fd();
 		}
-		nfds++;
-		timeout.tv_sec = child_wait_time;
-		timeout.tv_usec = 0;
-		ret = select(nfds, &read_fds, 0, 0, &timeout);
-		/* logparent(CM_INFO, "--- select returns %d\n", ret); */
-		if (-1 == ret && errno != EINTR) {
-			logparent(CM_WARN, "select error: %s\n",
-				  strerror(errno));
-		}
-		/* Read data on the pty first so we don't miss any. */
-		if (pty_fd >= 0) {
-			if (FD_ISSET(pty_fd, &read_fds)) {
-				read_pty_fd();
-			}
-		}
-		if (FD_ISSET(signal_command_pipe[0], &read_fds)) {
-			read_signal_command_pipe();
-		}
+	}
+	if (FD_ISSET(signal_command_pipe[0], &read_fds)) {
+		read_signal_command_pipe();
+	}
+	if (command_fifo_fd >= 0
+	    && FD_ISSET(command_fifo_fd, &read_fds)) {
+		read_command_fifo_fd();
 	}
 }
 
@@ -535,7 +618,7 @@ static void read_signal_command_pipe(void)
 		if (0 == ret) {
 			logparent(CM_WARN, "read end of pipe closed!!\n");
 			/* Make the pipe again. */
-			make_signal_pipe();
+			make_signal_command_pipe();
 			return;
 		}
 		else if (-1 == ret) {
@@ -583,6 +666,83 @@ static void read_signal_command_pipe(void)
 			break;
 		}
 	}
+}
+
+
+static void read_command_fifo_fd(void)
+{
+	int read_ret;
+	char c;
+
+	while (1) {
+		read_ret = read(command_fifo_fd, &c, 1);
+		switch (read_ret) {
+		case 0:
+			/* eof - this should never happen since we have a file
+			   descriptor open for writing */
+			logparent(CM_WARN, "command fifo closed, reopening\n");
+			close(command_fifo_fd);
+			make_command_fifo();
+			return;
+		case -1:
+			/* error */
+			if (errno != EWOULDBLOCK) {
+				logparent(CM_WARN,
+					  "Error reading from %s: %s\n",
+					  command_fifo_name, strerror(errno));
+				make_command_fifo();
+			}
+			return;
+		default:
+			/* logparent(CM_INFO, "command fifo: %c\n", c); */
+			switch (c) {
+			case '+':
+				start_monitoring("Command");
+				break;
+			case '-':
+				stop_monitoring("Command");
+				break;
+			case 'h':
+				send_hup_to_child();
+				break;
+			case 'i':
+				send_int_to_child();
+				break;
+			case 'x':
+				kill_child_and_exit();
+			default:
+				if (isprint(c))
+					logparent(CM_WARN,
+						  "Unknown command char %c\n",
+						  c);
+				else
+					logparent(CM_WARN,
+						  "Unknown command char 0x%02x\n",
+						  c);
+			}
+		}
+	}
+}
+
+
+static void kill_child_and_exit(void)
+{
+	time_t start;
+
+	start = time(0);
+
+	if (child_pid <= 0)
+		exit(0);
+	do_restart = 0;
+	do_exit = 1;
+	send_term_to_child();
+	min_child_wait_time = 5;
+	max_child_wait_time = 5;
+	while ((time(0) - start) < 6 && child_pid > 0)
+		wait_in_select();
+	if (child_pid > 0)
+		send_kill_to_child();
+	exit(0);
 }
 
 
@@ -750,7 +910,7 @@ static void set_child_wait_time(void)
  * Pass SIGHUP to the child.  If we're not a daemon, don't restart the child
  * when it exits.  For a daemon, keep running as normal.
  */
-static void handle_hup_signal(void)
+static void send_hup_to_child(void)
 {
 	if (is_daemon) {
 		if (child_pid <= 0) {
@@ -774,13 +934,19 @@ static void handle_hup_signal(void)
 }
 
 
+static void handle_hup_signal(void)
+{
+	send_hup_to_child();
+}
+
+
 /**
  * Pass SIGINT to the child.  If we're a daemon, restart the child if it exits
  * or exit when the child exits only if we were going to do that anyway (ie
  * don't change that behaviour because we got SIGINT).  If we're not a daemon,
  * don't restart the child when it exits, and exit ourselves then.
  */
-static void handle_int_signal(void)
+static void send_int_to_child(void)
 {
 	if (child_pid <= 0) {
 		if (is_daemon) {
@@ -810,6 +976,32 @@ static void handle_int_signal(void)
 }
 
 
+static void send_term_to_child(void)
+{
+	if (child_pid <= 0) {
+		return;
+	}
+	logparent(CM_INFO, "Sending SIGTERM\n");
+	kill(child_pid, SIGTERM);
+}
+
+
+static void send_kill_to_child(void)
+{
+	if (child_pid <= 0) {
+		return;
+	}
+	logparent(CM_INFO, "Sending SIGKILL\n");
+	kill(child_pid, SIGKILL);
+}
+
+
+static void handle_int_signal(void)
+{
+	send_int_to_child();
+}
+
+
 /**
  * Pass SIGTERM to the child and exit.
  */
@@ -828,24 +1020,35 @@ static void handle_term_signal(void)
 }
 
 
-static void handle_usr1_signal(void)
+static void stop_monitoring(const char *reason)
 {
-	logparent(CM_INFO, "SIGUSR1: I will not monitor %s\n",
-		  child_args[0]);
+	logparent(CM_INFO, "%s: I will not monitor %s\n",
+		  reason, child_args[0]);
 	do_restart = 0;
 }
 
 
-static void handle_usr2_signal(void)
+static void handle_usr1_signal(void)
 {
-	logparent(CM_INFO, "SIGUSR2: I will monitor %s again\n",
-		  child_args[0]);
+	stop_monitoring("SIGUSR1");
+}
+
+
+static void start_monitoring(const char *reason)
+{
+	logparent(CM_INFO, "%s: I will monitor %s again\n",
+		  reason, child_args[0]);
 	do_restart = 1;
 	child_wait_time = min_child_wait_time;
 	if (child_pid <= 0) {
 		start_child();
 	}
+}
 
+
+static void handle_usr2_signal(void)
+{
+	start_monitoring("SIGUSR2");
 }
 
 
@@ -904,7 +1107,7 @@ static void start_child(void)
 }
 
 
-static void make_signal_pipe(void)
+static void make_signal_command_pipe(void)
 {
 	int ret;
 
@@ -972,3 +1175,116 @@ static void delete_pid_file(void)
 	}
 }
 
+
+/**
+ * Create the command fifo if necessary and possible, then open it for reading.
+ */
+static void make_command_fifo(void)
+{
+	int stat_ret, mkfifo_ret;
+	struct stat statbuf;
+
+	if (! command_fifo_name)
+		return;
+
+	stat_ret = stat(command_fifo_name, &statbuf);
+	if (-1 == stat_ret) {
+		if (errno != ENOENT) {
+			const char *er = strerror(errno);
+			fprintf(stderr,
+				"%s: cannot stat %s: %s\n",
+				get_parent_log_name(), command_fifo_name, er);
+			exit(1);
+		}
+		mkfifo_ret = mkfifo(command_fifo_name, 0610);
+		if (mkfifo_ret) {
+			const char *er = strerror(errno);
+			fprintf(stderr,
+				"%s: cannot make fifo %s: %s\n",
+				get_parent_log_name(), command_fifo_name, er);
+			exit(1);
+		}
+	}
+	if (! stat_ret && ! S_ISFIFO(statbuf.st_mode)) {
+		/* The path exists but is not a fifo.  Bail out. */
+		fprintf(stderr,
+			"%s: %s exists but is not a fifo\n",
+			get_parent_log_name(), command_fifo_name);
+		exit(1);
+	}
+
+	/* When we get here, the fifo exists. */
+	command_fifo_fd = open(command_fifo_name, O_RDONLY|O_NONBLOCK);
+	if (-1 == command_fifo_fd) {
+		const char *er = strerror(errno);
+		fprintf(stderr, "%s: cannot open %s: %s\n",
+			get_parent_log_name(), command_fifo_name, er);
+		exit(1);
+	}
+
+	/* Also open the fifo for writing so we never get eof returned by read
+	   from the fifo.  O_RDWR should work instead of opening the fifo
+	   twice, but POSIX says that O_RDWR is undefined when used with a
+	   fifo. */
+	command_fifo_write_fd = open(command_fifo_name, O_WRONLY);
+	if (-1 == command_fifo_write_fd) {
+		const char *er = strerror(errno);
+		fprintf(stderr, "%s: cannot open %s for writing: %s\n",
+			get_parent_log_name(), command_fifo_name, er);
+		exit(1);
+	}
+
+	/* logparent(CM_INFO, "command fifo %d\n", command_fifo_fd); */
+}
+
+
+/**
+ * Send a command to a running process-monitor.
+ *
+ * We write a single byte representing the command into the command fifo.
+ */
+static void send_command(void)
+{
+	struct pmCommand *pmc = pmCommands;
+	char c = '\0';
+	int ret;
+
+	for (pmc=pmCommands; pmc->command; pmc++) {
+		if (!strcmp(pmc->command, command_name)) {
+			c = pmc->c;
+			break;
+		}
+	}
+	if (! c) {
+		fprintf(stderr,
+			"%s: unknown command %s\n",
+			get_parent_log_name(), command_name);
+		exit(1);
+	}
+	/* Find the command fifo to send to. */
+	if (! command_fifo_name) {
+		fprintf(stderr,
+			"%s: need a command pipe name\n",
+			get_parent_log_name());
+		exit(1);
+	}
+	command_fifo_fd = open(command_fifo_name, O_WRONLY|O_NONBLOCK);
+	if (-1 == command_fifo_fd) {
+		int saved_errno = errno;
+		const char *er = strerror(saved_errno);
+		fprintf(stderr, "%s: cannot open %s: %s\n",
+			get_parent_log_name(), command_fifo_name, er);
+		if (saved_errno == ENXIO) {
+			fprintf(stderr, "  Is there a reader process?\n");
+		}
+		exit(1);
+	}
+	ret = write(command_fifo_fd, &c, 1);
+	if (-1 == ret) {
+		const char *er = strerror(errno);
+		fprintf(stderr, "%s: cannot write to %s: %s\n",
+			get_parent_log_name(), command_fifo_name, er);
+		exit(1);
+	}
+	exit(0);
+}

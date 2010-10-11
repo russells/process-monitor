@@ -1,4 +1,8 @@
 *.d
 *.o
+
+# Ignore .pid files so we can more easily run tests.
+*.pid
+
 process-monitor
 process-monitor.1

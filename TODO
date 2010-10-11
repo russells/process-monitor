@@ -15,4 +15,3 @@ control the child.
 At the end of "make deb", lintian complains about not being able to check the
 created source package.  Find out if this is a problem with the use of
 git-buildpackage, or a problem in debian/ubuntu.
-

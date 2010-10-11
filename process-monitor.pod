@@ -6,6 +6,8 @@ process-monitor - run a child process and restart it when it exits.
 
 B<process-monitor> I<[options]> B<[--]> I<child [child_args...]>
 
+B<process-monitor> --command-pipe=I<fifo> --command=I<command>
+
 =head1 DESCRIPTION
 
 B<process-monitor> runs another program as a child process.  The child process
@@ -91,6 +93,13 @@ B<process-monitor> will always wait at least one second between restarts.
 The wait time starts at I<time>, and doubles for each start, up to the maximum
 specified with I<-M>.
 
+=item -P I<pipe>
+
+=item --command-pipe I<pipe>
+
+Create and open I<pipe> as a FIFO for receiving commands.  The commands are as
+listed in the section COMMANDS.
+
 =item -p I<pidfile>
 
 =item --pid-file I<pidfile>
@@ -116,6 +125,43 @@ users will be able to set gid if they are members of that group.
 =item --version
 
 Print the B<process-monitor> version and exit.
+
+=back
+
+=head1 COMMANDS
+
+B<process-monitor> can receive commands on a named pipe, given with the -P or
+--command-pipe option, that allow external programs to control its behaviour.
+B<process-monitor> takes a --command=I<command> option to control running
+B<process-monitor> processes by sending commands to the process' command pipe.
+
+The available I<command>s are:
+
+=over
+
+=item stop
+
+Make B<process-monitor> stop monitoring the child process.
+
+=item start
+
+Make B<process-monitor> start monitoring the child process if it had previously
+stopped.  If it is currently monitoring (ie it was not stopped previously) no
+action is taken.
+
+=item hup
+
+Make B<process-monitor> send a SIGHUP to the child process.
+
+=item int
+
+Make B<process-monitor> send a SIGINT to the child process.
+
+=item exit
+
+Make B<process-monitor> kill the child process and exit.  B<process-monitor>
+will send a SIGTERM to the child and then exit if the child does.  If the child
+has not exited after six seconds, it will send a SIGKILL and then exit itself.
 
 =back
 
@@ -217,6 +263,16 @@ will not be restarted.
 
 This will make B<process-monitor> monitor fred again, and if fred has exited,
 it will be restarted.
+
+=item Run a daemon, and listen on a command pipe
+
+ process-monitor --command-pipe=/var/run/wilma.fifo \
+            -- /usr/local/bin/wilma
+
+=item Send a signal to the daemon
+
+ process-monitor --command-pipe=/var/run/wilma.fifo \
+                 --command=hup
 
 =back
 
