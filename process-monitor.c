@@ -124,7 +124,7 @@ static struct option long_options[] = {
 	{ "email"         , 1, NULL, 'e' },
 	{ "env"           , 1, NULL, 'E' },
 	{ "child-log-name", 1, NULL, 'L' },
-	{ "help"          , 1, NULL, 'h' },
+	{ "help"          , 0, NULL, 'h' },
 	{ "log-name"      , 1, NULL, 'l' },
 	{ "max-wait-time" , 1, NULL, 'M' },
 	{ "min-wait-time" , 1, NULL, 'm' },
