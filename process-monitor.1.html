@@ -21,6 +21,7 @@
 	<li><a href="#synopsis">SYNOPSIS</a></li>
 	<li><a href="#description">DESCRIPTION</a></li>
 	<li><a href="#options">OPTIONS</a></li>
+	<li><a href="#commands">COMMANDS</a></li>
 	<li><a href="#signal_handling">SIGNAL HANDLING</a></li>
 	<li><a href="#configuration_file">CONFIGURATION FILE</a></li>
 	<li><a href="#examples">EXAMPLES</a></li>
@@ -42,6 +43,7 @@
 </p>
 <h1><a name="synopsis">SYNOPSIS</a></h1>
 <p><strong>process-monitor</strong> <em>[options]</em> <strong>[--]</strong> <em>child [child_args...]</em></p>
+<p><strong>process-monitor</strong> --command-pipe=<em>fifo</em> --command=<em>command</em></p>
 <p>
 </p>
 <h1><a name="description">DESCRIPTION</a></h1>
@@ -133,6 +135,14 @@ cases will be &quot;process-monitor&quot;.  Changing this enables messages from 
 <p>The wait time starts at <em>time</em>, and doubles for each start, up to the maximum
 specified with <em>-M</em>.</p>
 </dd>
+<dt><strong><a name="p_pipe" class="item">-P <em>pipe</em></a></strong></dt>
+
+<dt><strong><a name="command_pipe_pipe" class="item">--command-pipe <em>pipe</em></a></strong></dt>
+
+<dd>
+<p>Create and open <em>pipe</em> as a FIFO for receiving commands.  The commands are as
+listed in the section COMMANDS.</p>
+</dd>
 <dt><strong><a name="p_pidfile" class="item">-p <em>pidfile</em></a></strong></dt>
 
 <dt><strong><a name="pid_file_pidfile" class="item">--pid-file <em>pidfile</em></a></strong></dt>
@@ -159,6 +169,45 @@ users will be able to set gid if they are members of that group.</p>
 
 <dd>
 <p>Print the <strong>process-monitor</strong> version and exit.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h1><a name="commands">COMMANDS</a></h1>
+<p><strong>process-monitor</strong> can receive commands on a named pipe, given with the -P or
+--command-pipe option, that allow external programs to control its behaviour.
+<strong>process-monitor</strong> takes a --command=<em>command</em> option to control running
+<strong>process-monitor</strong> processes by sending commands to the process' command pipe.</p>
+<p>The available <em>command</em>s are:</p>
+<dl>
+<dt><strong><a name="stop" class="item">stop</a></strong></dt>
+
+<dd>
+<p>Make <strong>process-monitor</strong> stop monitoring the child process.</p>
+</dd>
+<dt><strong><a name="start" class="item">start</a></strong></dt>
+
+<dd>
+<p>Make <strong>process-monitor</strong> start monitoring the child process if it had previously
+stopped.  If it is currently monitoring (ie it was not stopped previously) no
+action is taken.</p>
+</dd>
+<dt><strong><a name="hup" class="item">hup</a></strong></dt>
+
+<dd>
+<p>Make <strong>process-monitor</strong> send a SIGHUP to the child process.</p>
+</dd>
+<dt><strong><a name="int" class="item">int</a></strong></dt>
+
+<dd>
+<p>Make <strong>process-monitor</strong> send a SIGINT to the child process.</p>
+</dd>
+<dt><strong><a name="exit" class="item">exit</a></strong></dt>
+
+<dd>
+<p>Make <strong>process-monitor</strong> kill the child process and exit.  <strong>process-monitor</strong>
+will send a SIGTERM to the child and then exit if the child does.  If the child
+has not exited after six seconds, it will send a SIGKILL and then exit itself.</p>
 </dd>
 </dl>
 <p>
@@ -265,6 +314,20 @@ will not be restarted.</p>
  kill -USR2 `cat /var/run/fred.pid`</pre>
 <p>This will make <strong>process-monitor</strong> monitor fred again, and if fred has exited,
 it will be restarted.</p>
+</dd>
+<dt><strong><a name="run_a_daemon_and_listen_on_a_command_pipe" class="item">Run a daemon, and listen on a command pipe</a></strong></dt>
+
+<dd>
+<pre>
+ process-monitor --command-pipe=/var/run/wilma.fifo \
+            -- /usr/local/bin/wilma</pre>
+</dd>
+<dt><strong><a name="send_a_signal_to_the_daemon2" class="item">Send a signal to the daemon</a></strong></dt>
+
+<dd>
+<pre>
+ process-monitor --command-pipe=/var/run/wilma.fifo \
+                 --command=hup</pre>
 </dd>
 </dl>
 <p>
