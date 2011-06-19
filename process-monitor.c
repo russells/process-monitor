@@ -1081,6 +1081,14 @@ static void start_child(void)
 	}
 
 	/* Child */
+	close(signal_command_pipe[0]);
+	close(signal_command_pipe[1]);
+	if (-1 != command_fifo_fd) {
+		close(command_fifo_fd);
+	}
+	if (-1 != command_fifo_write_fd) {
+		close(command_fifo_write_fd);
+	}
 	setup_env();
 	/* Set gid before uid, so that setting gid does not fail if we're no
 	   longer root. */
