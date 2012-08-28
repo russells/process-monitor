@@ -34,6 +34,7 @@ void envlist_add(struct envlist *envp, char *envvar)
 		char **new_env;
 		envp->maxlen += 10;
 		new_env = xrealloc(envp->env, sizeof(char*)*envp->maxlen);
+		envp->env = new_env;
 	}
 	envp->env[envp->len++] = envvar;
 	envp->env[envp->len  ] = NULL;
