@@ -70,6 +70,7 @@ static void handle_usr2_signal(void);
 
 
 static char *           child_dir = NULL;
+static char *			startup_sh = NULL;
 static int              go_daemon_flag = 0;
 static char *           email_address = NULL;
 static char **          child_args = NULL;
@@ -114,7 +115,7 @@ static struct pmCommand pmCommands[] = {
 };
 
 
-static const char *short_options = "D:dCc:E:e:hL:l:M:m:P:p:u:V";
+static const char *short_options = "D:dCc:E:e:hL:l:M:m:P:p:S:u:V";
 static struct option long_options[] = {
 	{ "dir"           , 1, NULL, 'D' },
 	{ "daemon"        , 0, NULL, 'd' },
@@ -129,6 +130,7 @@ static struct option long_options[] = {
 	{ "max-wait-time" , 1, NULL, 'M' },
 	{ "min-wait-time" , 1, NULL, 'm' },
 	{ "pid-file"      , 1, NULL, 'p' },
+	{ "startup-script", 1, NULL, 'S' },
 	{ "user"          , 1, NULL, 'u' },
 	{ "version"       , 0, NULL, 'V' },
 	{ 0               , 0,    0,   0 }
@@ -202,6 +204,9 @@ int main(int argc, char **argv)
 			break;
 		case 'P':
 			command_fifo_name = optarg;
+			break;
+		case 'S':
+			startup_sh = optarg;
 			break;
 		case 'u':
 			get_user_and_group_names(optarg);
@@ -1106,6 +1111,11 @@ static void start_child(void)
 		logparent(CM_ERROR, "cannot chdir() to %s: %s\n",
 			  child_dir, strerror(errno));
 		exit(99);
+	}
+	if (startup_sh) {
+		int ret = system(startup_sh);
+		if (WIFSIGNALED(ret) && (WTERMSIG(ret) == SIGINT || WTERMSIG(ret) == SIGQUIT))
+			exit(99);
 	}
 	if (execv(child_args[0], child_args)) {
 		logparent(CM_ERROR, "cannot exec %s: %s\n",
