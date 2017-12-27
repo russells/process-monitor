@@ -51,6 +51,7 @@ static void send_int_to_child(void);
 static void send_kill_to_child(void);
 static void send_term_to_child(void);
 static void kill_child_and_exit(void);
+static void close_all_fd(void);
 
 /*
  * These are essentially event handlers for the main loop.  The real signal
@@ -70,6 +71,7 @@ static void handle_usr2_signal(void);
 
 
 static char *           child_dir = NULL;
+static char *			startup_sh = NULL;
 static int              go_daemon_flag = 0;
 static char *           email_address = NULL;
 static char **          child_args = NULL;
@@ -100,6 +102,7 @@ static uid_t            child_uid = 0;
 static char *           child_username = NULL;
 static gid_t            child_gid = 0;
 static char *           child_groupname = NULL;
+static int              release_allfd = 0;
 
 
 struct pmCommand { char *command; char c; };
@@ -114,7 +117,7 @@ static struct pmCommand pmCommands[] = {
 };
 
 
-static const char *short_options = "D:dCc:E:e:hL:l:M:m:P:p:u:V";
+static const char *short_options = "D:dCc:E:e:hL:l:M:m:P:p:S:u:V:z";
 static struct option long_options[] = {
 	{ "dir"           , 1, NULL, 'D' },
 	{ "daemon"        , 0, NULL, 'd' },
@@ -129,8 +132,10 @@ static struct option long_options[] = {
 	{ "max-wait-time" , 1, NULL, 'M' },
 	{ "min-wait-time" , 1, NULL, 'm' },
 	{ "pid-file"      , 1, NULL, 'p' },
+	{ "startup-script", 1, NULL, 'S' },
 	{ "user"          , 1, NULL, 'u' },
 	{ "version"       , 0, NULL, 'V' },
+	{ "release-allfd" , 0, NULL, 'z' },
 	{ 0               , 0,    0,   0 }
 };
 
@@ -203,12 +208,18 @@ int main(int argc, char **argv)
 		case 'P':
 			command_fifo_name = optarg;
 			break;
+		case 'S':
+			startup_sh = optarg;
+			break;
 		case 'u':
 			get_user_and_group_names(optarg);
 			break;
 		case 'V':
 			printf("process-monitor 0.1\n");
 			exit(0);
+			break;
+		case 'z':
+			release_allfd = 1;
 			break;
 		case '?':
 			exit(1);
@@ -225,6 +236,9 @@ int main(int argc, char **argv)
 			exit(1);
 			break;
 		}
+	}
+	if (release_allfd) {
+		close_all_fd();
 	}
 
 	if (child_username) {
@@ -413,6 +427,7 @@ Usage: %s [args] [--] childpath [child_args...]\n\
   -p|--pid-file <file>        Write PID to <file>, if in the background\n\
   -u|--user <user>            User to run child as (name or uid)\n\
                                 (can be user:group)\n\
+  -z|--release-allfd          Release all opened file descriptors\n\
   -- is required if childpath or any of child_args begin with -\n",
 		get_parent_log_name(), get_parent_log_name());
 	exit(exitcode);
@@ -493,10 +508,11 @@ static void go_daemon(void)
 
 	/* We're not the foreground process any more. */
 	is_daemon = 1;
-
+	
 	close(0);
 	close(1);
 	close(2);
+	
 	/* Make sure something is open on fd 0,1,2. */
 	open("/dev/null", O_RDONLY);
 	open("/dev/null", O_WRONLY);
@@ -743,6 +759,15 @@ static void kill_child_and_exit(void)
 	if (child_pid > 0)
 		send_kill_to_child();
 	exit(0);
+}
+
+static void close_all_fd(void)
+{
+	int i = 3;
+	for(; i < sysconf(_SC_OPEN_MAX); i++)
+	{
+		close(i);
+	}
 }
 
 
@@ -1106,6 +1131,11 @@ static void start_child(void)
 		logparent(CM_ERROR, "cannot chdir() to %s: %s\n",
 			  child_dir, strerror(errno));
 		exit(99);
+	}
+	if (startup_sh) {
+		int ret = system(startup_sh);
+		if (WIFSIGNALED(ret) && (WTERMSIG(ret) == SIGINT || WTERMSIG(ret) == SIGQUIT))
+			exit(99);
 	}
 	if (execv(child_args[0], child_args)) {
 		logparent(CM_ERROR, "cannot exec %s: %s\n",
